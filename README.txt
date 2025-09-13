@@ -1,0 +1,1 @@
+WolfPack Volleyball PWA regenerated bundle. Open index.html or host it for Add to Home Screen.
