@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
+<title>WolfPack Volleyball – Touch Logger</title>
+<style>
+  :root{
+    --bg:#000000;          /* black */
+    --card:#111111;        /* near-black card */
+    --muted:#2a2a2a;       /* muted gray */
+    --text:#ffffff;        /* white */
+    --accent:#ff7f11;      /* bright orange */
+    --accent2:#ffad42;     /* light orange */
+    --warn:#ffa500;        /* orange warn */
+    --danger:#ff4c4c;      /* red */
+    --row:#0e0e0e;         /* table row alt */
+  }
+  *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+  html,body{height:100%}
+  body{margin:0;background:linear-gradient(180deg,var(--bg),#0a0a0a 40%,#151515);color:var(--text)}
+  header{position:sticky;top:0;z-index:1000;background:linear-gradient(180deg,var(--accent),#e66f00);color:#000;border-bottom:1px solid #222;box-shadow:0 6px 14px rgba(0,0,0,.35)}
+  header .wrap{max-width:1200px;margin:0 auto;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  header .brand{font-weight:900;letter-spacing:.5px;font-size:20px}
+  header .tagline{font-size:12px;opacity:.85}
+  .container{max-width:1200px;margin:24px auto;padding:16px;padding-bottom:110px}
+  .grid{display:grid;gap:16px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:var(--card);border:1px solid #222;border-radius:16px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+  h1{margin:0 0 8px;font-size:20px;color:var(--accent)}
+  .sub{opacity:.9;font-size:13px;margin-bottom:12px;color:#ddd}
+  .flex{display:flex;gap:8px;flex-wrap:wrap}
+  .kbd{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .btn{user-select:none;border:none;border-radius:14px;padding:14px 16px;font-weight:700;font-size:18px;cursor:pointer;background:#1c1c1c;color:var(--text);box-shadow:inset 0 -2px 0 rgba(255,255,255,.05)}
+  .btn:active{transform:translateY(1px)}
+  .btn.xl{font-size:22px;padding:16px}
+  .btn.accent{background:linear-gradient(180deg,var(--accent),#e66f00);color:#000}
+  .btn.info{background:linear-gradient(180deg,var(--accent2),#ff8c1a);color:#000}
+  .btn.warn{background:linear-gradient(180deg,var(--warn),#cc8400);color:#000}
+  .btn.danger{background:linear-gradient(180deg,var(--danger),#cc0000);color:#fff}
+  .btn.ghost{background:#000;border:1px solid #444}
+  .display{display:flex;align-items:center;justify-content:space-between;background:#000;border:1px solid #333;border-radius:14px;padding:10px 12px;margin:8px 0}
+  .code{font-size:24px;font-weight:800;letter-spacing:.5px;color:var(--accent)}
+  .muted{opacity:.8}
+  .pill{background:#000;border:1px solid #444;border-radius:999px;padding:6px 10px;font-size:12px;color:var(--accent2)}
+  table{width:100%;border-collapse:collapse}
+  thead tr{background:#0a0a0a}
+  tbody tr:nth-child(even){background:var(--row)}
+  th,td{border-bottom:1px solid #242424;padding:10px 8px;text-align:left;font-size:14px}
+  th{font-weight:700;opacity:.95;color:var(--accent)}
+  tr:hover td{background:#131313}
+  .right{text-align:right}
+  .footer{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:12px}
+  .input{background:#000;border:1px solid #444;border-radius:10px;padding:10px 12px;color:var(--text);font-size:16px}
+  label{font-size:12px;opacity:.95;display:block;margin-bottom:6px;color:var(--accent2)}
+  .field{min-width:160px}
+  .field + .field{margin-left:10px}
+  .sticky-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,.9);backdrop-filter:blur(6px);border-top:1px solid #333;padding:10px 12px;display:flex;gap:8px;justify-content:flex-end;z-index:999}
+  .tag{font-size:11px;opacity:.85}
+  @media (max-width:1020px){
+    .container{padding:12px;padding-bottom:120px}
+    .row{grid-template-columns:1fr}
+    .kbd{grid-template-columns:repeat(3,1fr)}
+    .btn{padding:16px 14px;font-size:18px}
+    .btn.xl{padding:18px;font-size:24px}
+    .display{flex-direction:column;align-items:flex-start;gap:6px}
+    th,td{font-size:13px;padding:8px 6px}
+    .field{min-width:unset;flex:1}
+    .field + .field{margin-left:0}
+    .flex.inputs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .sticky-bar{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 10px)}
+  }
+  @media (max-width:480px){ .flex.inputs{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header><div class="wrap"><div class="brand">WolfPack Volleyball</div><div class="tagline">Touch Logger & Dashboard</div></div></header>
+<div class="container grid">
+
+  <!-- Roster -->
+  <div class="card">
+    <h1>Roster</h1>
+    <div class="sub">Assign names to player numbers.</div>
+    <div class="flex inputs" style="align-items:flex-end">
+      <div class="field">
+        <label for="roNum">Player #</label>
+        <input id="roNum" class="input" type="number" min="0" max="99" inputmode="numeric" placeholder="Player #" />
+      </div>
+      <div class="field">
+        <label for="roName">Player Name</label>
+        <input id="roName" class="input" type="text" placeholder="Player Name" />
+      </div>
+      <button class="btn accent" id="roAdd" style="height:44px">Add / Update</button>
+      <button class="btn ghost" id="roClear" style="height:44px">Clear Roster</button>
+    </div>
+    <div class="sub" style="margin-top:8px">Current Roster</div>
+    <table id="roTable">
+      <thead><tr><th>#</th><th>Name</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h1>WolfPack Volleyball – Touch Logger</h1>
+    <div class="sub">Tap to record plays. Left: numeric pad for <b>Player #</b>. Right: action buttons (R S T D F B A). Then pick a qualifier. Press <b>Enter</b> to add to the log.</div>
+
+    <div class="display">
+      <div>
+        <div class="muted" style="font-size:12px">Current Entry</div>
+        <div class="code" id="code">--</div>
+      </div>
+      <div class="flex">
+        <span class="pill" id="pillPlayer">Player: --</span>
+        <span class="pill" id="pillAction">Action: --</span>
+        <span class="pill" id="pillQual">Qualifier: --</span>
+      </div>
+    </div>
+
+    <div class="row">
+      <!-- LEFT: Numeric Pad -->
+      <div class="card">
+        <div class="sub">Player Number</div>
+        <div class="kbd" id="pad">
+          <button class="btn xl" data-num="1">1</button>
+          <button class="btn xl" data-num="2">2</button>
+          <button class="btn xl" data-num="3">3</button>
+          <button class="btn xl" data-num="4">4</button>
+          <button class="btn xl" data-num="5">5</button>
+          <button class="btn xl" data-num="6">6</button>
+          <button class="btn xl" data-num="7">7</button>
+          <button class="btn xl" data-num="8">8</button>
+          <button class="btn xl" data-num="9">9</button>
+          <button class="btn warn" id="back">⌫</button>
+          <button class="btn xl" data-num="0">0</button>
+          <button class="btn danger" id="clear">C</button>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+          <span class="muted" style="font-size:12px">Tap numbers to set the player (00–99). Two digits are kept.</span>
+        </div>
+      </div>
+
+      <!-- RIGHT: Actions & Qualifiers -->
+      <div class="card">
+        <div class="sub">Actions</div>
+        <div class="flex" id="actions">
+          <button class="btn info" data-action="R">R (Receive)</button>
+          <button class="btn info" data-action="S">S (Serve)</button>
+          <button class="btn info" data-action="T">T (Set)</button>
+          <button class="btn info" data-action="D">D (Dig)</button>
+          <button class="btn info" data-action="F">F (Free)</button>
+          <button class="btn info" data-action="B">B (Block)</button>
+          <button class="btn info" data-action="A">A (Attack)</button>
+        </div>
+
+        <div class="sub" style="margin-top:12px">Qualifiers</div>
+        <div class="flex" id="quals"></div>
+
+        <div class="footer">
+          <button class="btn ghost" id="reset">Reset</button>
+          <button class="btn accent" id="enter">Enter ⏎</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="card">
+    <h1>Log</h1>
+    <div class="sub">Tap Enter to append a row. Export as CSV and import into Excel (Entry sheet) to drive stats.</div>
+    <table id="log">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Code</th>
+          <th>Player</th>
+          <th>Action</th>
+          <th>Qualifier</th>
+          <th>Meaning</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="footer">
+      <button class="btn ghost" id="undo">Undo</button>
+      <button class="btn" id="copy">Copy Log CSV</button>
+      <button class="btn" id="download">Download Log CSV</button>
+    </div>
+    <div class="sub tag">CSV columns: Time, Code, Player, Name, Action, Qualifier, Meaning.</div>
+  </div>
+
+  <!-- Player Dashboard -->
+  <div class="card">
+    <h1>Player Dashboard</h1>
+    <div class="sub">Live totals and efficiency metrics (based on the log above).</div>
+    <table id="dash">
+      <thead>
+        <tr>
+          <th>Player</th>
+          <th>R</th><th>R3</th><th>R2</th><th>R1</th><th>R0</th><th>Recv Avg</th><th>Recv %</th>
+          <th>S</th><th>SA</th><th>SE</th><th>S+</th><th>S-</th><th>Serve %</th>
+          <th>A</th><th>AK</th><th>AE</th><th>AB</th><th>A-</th><th>Hit %</th>
+          <th>B</th><th>BK</th><th>BT</th><th>BE</th><th>BM</th>
+          <th>D</th><th>D3</th><th>D2</th><th>D1</th><th>D0</th><th>Dig Avg</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="footer">
+      <button class="btn" id="exportStats">Export Player Stats CSV</button>
+    </div>
+  </div>
+
+  <!-- Sticky bottom bar on phones -->
+  <div class="sticky-bar" id="stickyBar">
+    <button class="btn ghost" id="stickyReset">Reset</button>
+    <button class="btn accent" id="stickyEnter">Enter ⏎</button>
+  </div>
+
+  <!-- Legend -->
+  <div class="card">
+    <h1>Legend</h1>
+    <div class="sub">Action → qualifiers</div>
+    <div class="flex">
+      <span class="pill">R: 0,1,2,3 (receive quality)</span>
+      <span class="pill">S: A,E,+,- (ace, error, tough, neutral)</span>
+      <span class="pill">A: K,B,E,- (kill, blocked, error, defended)</span>
+      <span class="pill">B: K,T,E,M (block kill, touch, error, miss)</span>
+      <span class="pill">D/T: 0,1,2,3 (quality)</span>
+      <span class="pill">F: Y,E (clean, error)</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+    });
+  }
+
+  const qualsByAction = { R:["3","2","1","0"], S:["A","+","-","E"], A:["K","B","-","E"], B:["K","T","M","E"], D:["3","2","1","0"], T:["3","2","1","0"], F:["Y","E"] };
+  const meanings = {
+    R3:"Receive: excellent", R2:"Receive: good", R1:"Receive: poor", R0:"Receive: overpass/loss",
+    SA:"Serve: ace", "S+":"Serve: tough", "S-":"Serve: neutral", SE:"Serve: error",
+    AK:"Attack: kill", AB:"Attack: blocked", "A-":"Attack: defended", AE:"Attack: error",
+    BK:"Block: block kill", BT:"Block: touch", BM:"Block: miss", BE:"Block: error",
+    D3:"Dig: perfect", D2:"Dig: controlled", D1:"Dig: scramble", D0:"Dig: missed",
+    T3:"Set: perfect", T2:"Set: good", T1:"Set: off-target", T0:"Set: fault",
+    FY:"Free ball: clean", FE:"Free ball: error"
+  };
+
+  // --- Roster storage ---
+  const roster = {};
+  const roNum = document.getElementById('roNum');
+  const roName = document.getElementById('roName');
+  function twoDigit(n){ n=(""+n).replace(/\D/g,''); n=n.slice(-2); return n.padStart(2,'0'); }
+  function refreshRosterTable(){
+    const tb=document.querySelector('#roTable tbody');
+    tb.innerHTML='';
+    Object.keys(roster).sort((a,b)=>parseInt(a)-parseInt(b)).forEach(num=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML = `<td>${num}</td><td>${roster[num]}</td>`;
+      tb.appendChild(tr);
+    });
+  }
+  document.getElementById('roAdd').addEventListener('click', ()=>{
+    const n = twoDigit(roNum.value.trim()); const nm = roName.value.trim();
+    if(!n || !nm) return; roster[n]=nm; roNum.value=''; roName.value=''; refreshRosterTable(); updateDisplay(); recompute();
+  });
+  document.getElementById('roClear').addEventListener('click', ()=>{ for(const k in roster) delete roster[k]; refreshRosterTable(); updateDisplay(); recompute(); });
+
+  // --- Current selection ---
+  let playerDigits = ""; let action = ""; let qual = "";
+  const codeEl = document.getElementById('code');
+  const pillP = document.getElementById('pillPlayer');
+  const pillA = document.getElementById('pillAction');
+  const pillQ = document.getElementById('pillQual');
+  const qualsWrap = document.getElementById('quals');
+
+  function updateDisplay(){
+    const num = playerDigits? twoDigit(playerDigits):"--";
+    const name = roster[num]||'';
+    const code = (playerDigits? twoDigit(playerDigits):"--") + (action||"-") + (qual||"-");
+    codeEl.textContent = code.replace(/--.*/,'--');
+    pillP.textContent = `Player: ${num}${name? ' – '+name:''}`;
+    pillA.textContent = `Action: ${action||"--"}`;
+    pillQ.textContent = `Qualifier: ${qual||"--"}`;
+  }
+
+  function renderQuals(){
+    qualsWrap.innerHTML = '';
+    if(!action) return;
+    (qualsByAction[action]||[]).forEach(q => {
+      const b = document.createElement('button');
+      b.className = 'btn xl'; b.textContent = q;
+      b.addEventListener('click', ()=>{ qual = q; updateDisplay(); });
+      qualsWrap.appendChild(b);
+    });
+  }
+
+  // Numeric pad
+  document.getElementById('pad').addEventListener('click', (e)=>{
+    const num = e.target.getAttribute('data-num'); if(!num) return;
+    if(playerDigits.length >= 2) playerDigits = playerDigits.slice(1);
+    playerDigits += num; updateDisplay();
+  });
+  document.getElementById('back').addEventListener('click', ()=>{ playerDigits = playerDigits.slice(0,-1); updateDisplay(); });
+  document.getElementById('clear').addEventListener('click', ()=>{ playerDigits = ""; updateDisplay(); });
+
+  // Actions
+  document.getElementById('actions').addEventListener('click', (e)=>{
+    const a = e.target.getAttribute('data-action'); if(!a) return;
+    action = a; qual = ""; updateDisplay(); renderQuals();
+  });
+
+  function resetAll(){ playerDigits = ""; action = ""; qual = ""; updateDisplay(); renderQuals(); }
+  document.getElementById('reset').addEventListener('click', resetAll);
+  document.getElementById('stickyReset').addEventListener('click', resetAll);
+  document.getElementById('stickyEnter').addEventListener('click', ()=> document.getElementById('enter').click());
+
+  // Log + dashboard data
+  const tbody = document.querySelector('#log tbody');
+  const dashBody = document.querySelector('#dash tbody');
+  const historyStack = [];
+  function now(){ const d=new Date();return d.toLocaleTimeString(); }
+
+  function enter(){
+    if(!playerDigits || !action || !qual){ codeEl.textContent='Complete player, action, qualifier'; return; }
+    const p = twoDigit(playerDigits); const code = p+action+qual; const key = action+qual; const name = roster[p]||'';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${now()}</td><td><b>${code}</b></td><td>${p}${name? ' – '+name:''}</td><td>${action}</td><td>${qual}</td><td>${meanings[key]||''}</td>`;
+    tbody.appendChild(tr);
+    historyStack.push({time: now(), code, p, name, action, qual});
+    resetAll();
+    recompute();
+  }
+  document.getElementById('enter').addEventListener('click', enter);
+
+  document.getElementById('undo').addEventListener('click', ()=>{
+    if(historyStack.length===0) return;
+    historyStack.pop(); if(tbody.lastChild) tbody.removeChild(tbody.lastChild);
+    recompute();
+  });
+
+  function toCSVLog(){
+    const lines = [["Time","Code","Player","Name","Action","Qualifier","Meaning"]];
+    historyStack.forEach(r=>{
+      const meaning = meanings[r.action+r.qual]||"";
+      lines.push([r.time,r.code,r.p,r.name||'',r.action,r.qual,meaning]);
+    });
+    return lines.map(row=>row.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n');
+  }
+  document.getElementById('copy').addEventListener('click', async ()=>{
+    try{ await navigator.clipboard.writeText(toCSVLog()); alert('Log CSV copied'); }
+    catch{ alert('Copy not supported. Use Download instead.'); }
+  });
+  document.getElementById('download').addEventListener('click', ()=> downloadCSV(toCSVLog(),'touch_log.csv'));
+
+  function downloadCSV(text, filename){
+    const a=document.createElement('a'); const blob=new Blob([text],{type:'text/csv'});
+    a.href=URL.createObjectURL(blob); a.download=filename; a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  // Player dashboard
+  function recompute(){
+    const P = {}; // per-player buckets
+    const ensure = pl => P[pl]||(P[pl]={name: roster[pl]||'', R:{'3':0,'2':0,'1':0,'0':0}, S:{A:0,E:0,'+':0,'-':0}, A:{K:0,E:0,B:0,'-':0}, B:{K:0,T:0,E:0,M:0}, D:{'3':0,'2':0,'1':0,'0':0}});
+
+    historyStack.forEach(r=>{
+      const pl = r.p; ensure(pl);
+      if(r.action==='R' && P[pl].R[r.qual]!==undefined) P[pl].R[r.qual]++;
+      if(r.action==='S' && P[pl].S[r.qual]!==undefined) P[pl].S[r.qual]++;
+      if(r.action==='A' && P[pl].A[r.qual]!==undefined) P[pl].A[r.qual]++;
+      if(r.action==='B' && P[pl].B[r.qual]!==undefined) P[pl].B[r.qual]++;
+      if(r.action==='D' && P[pl].D[r.qual]!==undefined) P[pl].D[r.qual]++;
+    });
+
+    dashBody.innerHTML = '';
+    Object.keys(P).sort((a,b)=>parseInt(a)-parseInt(b)).forEach(pl=>{
+      const nm=P[pl].name||'';
+      const r3=P[pl].R['3'], r2=P[pl].R['2'], r1=P[pl].R['1'], r0=P[pl].R['0'];
+      const Rt = r3+r2+r1+r0; const recvAvg = Rt? ((3*r3+2*r2+1*r1)/Rt).toFixed(2):''; const recvPct = Rt? (((r3+r2)/Rt)*100).toFixed(0)+'%':'';
+      const sA=P[pl].S.A, sE=P[pl].S.E, sp=P[pl].S['+'], sn=P[pl].S['-']; const St = sA+sE+sp+sn; const servePct = St? (((sA+sp)/St)*100).toFixed(0)+'%':'';
+      const aK=P[pl].A.K, aE=P[pl].A.E, aB=P[pl].A.B, aN=P[pl].A['-']; const At = aK+aE+aB+aN; const hitPct = At? (((aK-aE)/Math.max(At,1))*100).toFixed(0)+'%':'';
+      const bK=P[pl].B.K, bT=P[pl].B.T, bE=P[pl].B.E, bM=P[pl].B.M; const Bt=bK+bT+bE+bM;
+      const d3=P[pl].D['3'], d2=P[pl].D['2'], d1=P[pl].D['1'], d0=P[pl].D['0']; const Dt=d3+d2+d1+d0; const digAvg = Dt? ((3*d3+2*d2+1*d1)/Dt).toFixed(2):'';
+
+      const tr=document.createElement('tr');
+      tr.innerHTML = `
+        <td><b>${pl}</b>${nm? ' – '+nm:''}</td>
+        <td>${Rt}</td><td>${r3}</td><td>${r2}</td><td>${r1}</td><td>${r0}</td><td>${recvAvg}</td><td>${recvPct}</td>
+        <td>${St}</td><td>${sA}</td><td>${sE}</td><td>${sp}</td><td>${sn}</td><td>${servePct}</td>
+        <td>${At}</td><td>${aK}</td><td>${aE}</td><td>${aB}</td><td>${aN}</td><td>${hitPct}</td>
+        <td>${Bt}</td><td>${bK}</td><td>${bT}</td><td>${bE}</td><td>${bM}</td>
+        <td>${Dt}</td><td>${d3}</td><td>${d2}</td><td>${d1}</td><td>${d0}</td><td>${digAvg}</td>`;
+      dashBody.appendChild(tr);
+    });
+  }
+
+  document.getElementById('exportStats').addEventListener('click', ()=>{
+    const rows = [[
+      'Player','R','R3','R2','R1','R0','RecvAvg','RecvRatePct','S','SA','SE','Splus','Sminus','ServePressurePct','A','AK','AE','AB','Aminus','HittingPct','B','BK','BT','BE','BM','D','D3','D2','D1','D0','DigAvg'
+    ]];
+    document.querySelectorAll('#dash tbody tr').forEach(tr=>{
+      const t=[...tr.children].map(td=>td.textContent);
+      rows.push([
+        t[0],t[1],t[2],t[3],t[4],t[5],t[6],t[7], t[8],t[9],t[10],t[11],t[12],t[13], t[14],t[15],t[16],t[17],t[18],t[19], t[20],t[21],t[22],t[23],t[24], t[25],t[26],t[27],t[28],t[29],t[30]
+      ]);
+    });
+    const csv = rows.map(r=>r.join(',')).join('\n');
+    const a=document.createElement('a'); const blob=new Blob([csv],{type:'text/csv'});
+    a.href=URL.createObjectURL(blob); a.download='player_stats.csv'; a.click(); URL.revokeObjectURL(a.href);
+  });
+
+  // init
+  refreshRosterTable();
+  updateDisplay();
+  document.getElementById('enter').addEventListener('click', enter);
+})();
+</script>
+</body>
+</html>
