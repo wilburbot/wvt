@@ -13,7 +13,7 @@
   }
   *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
   body{margin:0;background:var(--bg);color:var(--text)}
-  header{position:sticky;top:0;z-index:40;background:linear-gradient(180deg,var(--accent),#f36f00);color:#fff;padding:14px 16px;font-weight:900;font-size:18px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  header{position:sticky;top:0;z-index:40;background:#000;color:#fff;padding:14px 16px;font-weight:900;font-size:18px;display:flex;align-items:center;justify-content:space-between;gap:12px}
   .nav{display:flex;gap:8px}
   .nav a{color:#fff;text-decoration:none;font-weight:800;border:1px solid rgba(255,255,255,.35);padding:6px 10px;border-radius:999px}
   .nav a.active{background:#fff;color:#000;border-color:transparent}
@@ -64,7 +64,10 @@
 </head>
 <body>
 <header>
-  <span>WOLFPACK VOLLEYBALL</span>
+  <span style="display:flex;align-items:center;gap:12px">
+    <img src="/mnt/data/TRU WolfPack Logo.png" alt="TRU WolfPack Logo" style="height:40px">
+    <span>WOLFPACK VOLLEYBALL</span>
+  </span>
   <nav class="nav">
     <a href="#logger" id="tabLogger" class="active">Logger</a>
     <a href="#dash" id="tabDash">Dashboard</a>
@@ -82,6 +85,7 @@
           <input id="eventName" class="input" placeholder="New event name (e.g., Match vs Bears)">
           <button class="btn accent" id="eventAdd">Add Event</button>
           <button class="btn" id="eventSave">Save Event</button>
+          <button class="btn" id="eventSaveChanges">Save Changes</button>
           <button class="btn ghost" id="eventDelete">Delete Event</button>
         </div>
         <div class="sub">One event per match. Each event keeps its own log and dashboards.</div>
@@ -311,7 +315,7 @@
   // --- Event management ---
   function renderEvents(){ const sel=$('eventSelect'); sel.innerHTML=''; Object.keys(S.events).forEach(k=>{ const o=el('option','',k); o.value=k; if(k===S.currentEvent) o.selected=true; sel.appendChild(o); }); }
   $('eventAdd').onclick=()=>{ const name=$('eventName').value.trim(); if(!name) return; if(!S.events[name]) S.events[name]={log:[],dash:{},rot:{serve:{},so:{}}}; S.currentEvent=name; $('eventName').value=''; save(S); renderEvents(); renderAllFromEvent(); };
-  $('eventSave').onclick=()=>{ save(S); };
+  $('eventSave').onclick=()=>{ save(S); alert('All events saved. Current: '+S.currentEvent); };
   $('eventDelete').onclick=()=>{ if(S.currentEvent===defaultEvent) return alert('Cannot delete Default event'); if(!confirm('Delete event "'+S.currentEvent+'"?')) return; delete S.events[S.currentEvent]; S.currentEvent=defaultEvent; save(S); renderEvents(); renderAllFromEvent(); };
   $('eventSelect').onchange=e=>{ S.currentEvent=e.target.value; save(S); renderAllFromEvent(); };
 
@@ -511,24 +515,43 @@
     const a=document.createElement('a'); a.href=url; a.download='wolfpack_logger_'+S.currentEvent.replace(/\s+/g,'_')+'.csv'; a.click(); URL.revokeObjectURL(url);
   };
   $('clearLog').onclick=()=>{
-    if(!confirm('Clear ALL logs for this event?')) return;
+    const ok = confirm('Clear ALL logs for this event?');
+    if(!ok) return;
     const ev=EVT();
     ev.log=[]; ev.dash={}; ev.rot={ serve:{}, so:{} };
     save(S);
-    renderLog(); renderDash();
+    renderLog(); renderDash(); renderZones(); updateDisplay();
     const c=$('code'); if(c) c.textContent='--';
+    alert('All logs cleared for event: '+S.currentEvent);
   };
 
   // Wire roster buttons
   $('teamAdd').onclick=()=>{ if($('teamNum').value && $('teamName').value){ addPlayer('Team', $('teamNum').value, $('teamName').value); $('teamNum').value=''; $('teamName').value=''; }};
-  $('teamClear').onclick=()=>{ if(!confirm('Clear Team roster, libero, and court?')) return; clearRoster('Team'); };
+  $('teamClear').onclick=()=>{
+    const ok = confirm('Clear Team roster, libero, and court?');
+    if(!ok) return;
+    clearRoster('Team');
+    alert('Team roster and court cleared.');
+  };
   $('oppAdd').onclick=()=>{ if($('oppNum').value && $('oppName').value){ addPlayer('Opp', $('oppNum').value, $('oppName').value); $('oppNum').value=''; $('oppName').value=''; }};
-  $('oppClear').onclick=()=>{ if(!confirm('Clear Opponent roster, libero, and court?')) return; clearRoster('Opp'); };
+  $('oppClear').onclick=()=>{
+    const ok = confirm('Clear Opponent roster, libero, and court?');
+    if(!ok) return;
+    clearRoster('Opp');
+    alert('Opponent roster and court cleared.');
+  };
 
   // Initial render
   ;['Team','Opp'].forEach(side=>{ bindCourt(side); renderRoster(side); });
-  function renderAllFromEvent(){ renderLog(); renderDash(); renderZones(); renderHints(); renderQuals(); updateDisplay(); }
+  function renderAllFromEvent(){ renderLog(); renderDash(); renderZones(); renderHints(); renderQuals(); updateDisplay(); renderRoster('Team'); renderRoster('Opp'); }
   renderEvents(); if($('eventSelect')) $('eventSelect').value=S.currentEvent; renderAllFromEvent(); renderSavedRosters();
+  // Save Changes button — persists current in-memory state
+  $('eventSaveChanges').onclick=()=>{
+    S.events[S.currentEvent] = EVT();
+    save(S);
+    alert('Changes saved for event: '+S.currentEvent);
+  };
+
   applyHash();
 
   // --- Minimal test runner (manual) ---
