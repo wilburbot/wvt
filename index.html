@@ -77,8 +77,7 @@
   </nav>
 </header>
 
-<!-- ===== Paste of the latest working app (HTML + JS) from your canvas ===== -->
-<!-- For brevity, this build includes the exact UI/logic you’ve been testing. -->
+<!-- LOGGER PAGE -->
 <div id="pageLogger" class="page active">
   <div class="container">
     <section class="grid">
@@ -91,6 +90,8 @@
           <button class="btn" id="eventSave">Save Event</button>
           <button class="btn" id="eventSaveChanges">Save Changes</button>
           <button class="btn ghost" id="eventDelete">Delete Event</button>
+          <!-- NEW -->
+          <button class="btn" id="eventNew">New Event (Reset)</button>
         </div>
         <div class="sub">One event per match. Each event keeps its own log and dashboards.</div>
       </div>
@@ -148,7 +149,7 @@
           <div class="row" style="justify-content:space-between;align-items:center">
             <div>
               <h1>Team Court</h1>
-              <div class="sub">Tap a slot to select. Then tap a roster player to assign. Long‑press a slot to clear.</div>
+              <div class="sub">Tap a slot to select. Then tap a roster player to assign. Long-press a slot to clear.</div>
             </div>
             <div class="row">
               <button id="teamRotateCW" class="btn small">Rotate ⟳</button>
@@ -172,7 +173,7 @@
           <div class="row" style="justify-content:space-between;align-items:center">
             <div>
               <h1>Opponent Court</h1>
-              <div class="sub">Tap a slot to select. Then tap a roster player to assign. Long‑press a slot to clear.</div>
+              <div class="sub">Tap a slot to select. Then tap a roster player to assign. Long-press a slot to clear.</div>
             </div>
             <div class="row">
               <button id="oppRotateCW" class="btn small">Rotate ⟳</button>
@@ -237,11 +238,12 @@
   </div>
 </div>
 
+<!-- DASHBOARD PAGE -->
 <div id="pageDash" class="page">
   <div class="container">
     <div class="card">
       <h1>Team Dashboard</h1>
-      <div class="sub">Team KPIs and per‑player stats for the selected event.</div>
+      <div class="sub">Team KPIs and per-player stats for the selected event.</div>
       <div id="kpiRowTeam" class="kpi-grid"></div>
       <table id="dashTeam"><thead><tr>
         <th>#</th><th>Name</th>
@@ -255,7 +257,7 @@
     </div>
     <div class="card">
       <h1>Opponent Dashboard</h1>
-      <div class="sub">Opponent KPIs and per‑player stats for the selected event.</div>
+      <div class="sub">Opponent KPIs and per-player stats for the selected event.</div>
       <div id="kpiRowOpp" class="kpi-grid"></div>
       <table id="dashOpp"><thead><tr>
         <th>#</th><th>Name</th>
@@ -271,15 +273,11 @@
 </div>
 
 <script>
-// === JS app (identical logic you tested) ===
-// NOTE: This is the same code produced in canvas, shortened here for space.
-// In your repo you can keep editing ONLY index.html — like before.
 (function(){
   'use strict';
   const $=id=>document.getElementById(id);
   const el=(t,cls,txt)=>{const e=document.createElement(t); if(cls) e.className=cls; if(txt!==undefined) e.textContent=txt; return e;};
-  const num2=v=>String(v||'').replace(/\\D/g,'').slice(-2).padStart(2,'0');
-  const now=()=>new Date().toLocaleTimeString();
+  const num2=v=>String(v||'').replace(/\D/g,'').slice(-2).padStart(2,'0');
   const trunc=(s,n=18)=> (s||'').length>n ? s.slice(0,n-1)+'…' : (s||'');
   const QUALS={ R:["3","2","1","0"], S:["A","+","-","E"], A:["K","B","-","E"], B:["K","T","M","E"], D:["3","2","1","0"], T:["3","2","1","0"], F:["Y","E"] };
   const MEAN={ R3:"Receive: excellent", R2:"Receive: good", R1:"Receive: poor", R0:"Receive: loss",
@@ -289,10 +287,13 @@
                D3:"Dig: perfect", D2:"Dig: controlled", D1:"Dig: scramble", D0:"Dig: missed",
                T3:"Set: perfect", T2:"Set: good", T1:"Set: off-target", T0:"Set: fault",
                FY:"Free ball: clean", FE:"Free ball: error" };
+
+  // Persistent state
   const LS='wpvb_events_roster_rot_v2_backrow2';
   const load=()=>{ try{return JSON.parse(localStorage.getItem(LS)||'{}')}catch(e){return{}} };
   const save=s=>localStorage.setItem(LS,JSON.stringify(s));
   const defaultEvent='Default';
+
   const S=Object.assign({
     events:{},
     currentEvent: defaultEvent,
@@ -308,15 +309,41 @@
   if(!S.currentEvent) S.currentEvent=defaultEvent;
   const EVT=()=>S.events[S.currentEvent];
 
+  // Tabs
   function applyHash(){ const h=location.hash||'#logger'; const isDash=h==='#dash'; $('tabLogger').classList.toggle('active',!isDash); $('tabDash').classList.toggle('active',isDash); $('pageLogger').classList.toggle('active',!isDash); $('pageDash').classList.toggle('active',isDash); if(isDash) renderDash(); }
   window.addEventListener('hashchange',applyHash);
 
+  // Event mgmt
   function renderEvents(){ const sel=$('eventSelect'); sel.innerHTML=''; Object.keys(S.events).forEach(k=>{ const o=el('option','',k); o.value=k; if(k===S.currentEvent) o.selected=true; sel.appendChild(o); }); }
   $('eventAdd').onclick=()=>{ const name=$('eventName').value.trim(); if(!name) return; if(!S.events[name]) S.events[name]={log:[],dash:{},rot:{serve:{},so:{}}}; S.currentEvent=name; $('eventName').value=''; save(S); renderEvents(); renderAllFromEvent(); };
   $('eventSave').onclick=()=>{ save(S); alert('All events saved. Current: '+S.currentEvent); };
-  $('eventDelete').onclick=()=>{ if(S.currentEvent===defaultEvent) return alert('Cannot delete Default event'); if(!confirm('Delete event \"'+S.currentEvent+'\"?')) return; delete S.events[S.currentEvent]; S.currentEvent=defaultEvent; save(S); renderEvents(); renderAllFromEvent(); };
+  $('eventDelete').onclick=()=>{ if(S.currentEvent===defaultEvent) return alert('Cannot delete Default event'); if(!confirm('Delete event "'+S.currentEvent+'"?')) return; delete S.events[S.currentEvent]; S.currentEvent=defaultEvent; save(S); renderEvents(); renderAllFromEvent(); };
   $('eventSelect').onchange=e=>{ S.currentEvent=e.target.value; save(S); renderAllFromEvent(); };
+  $('eventSaveChanges').onclick=()=>{ S.events[S.currentEvent] = EVT(); save(S); alert('Changes saved for event: '+S.currentEvent); };
 
+  // NEW: Reset to fresh Default event
+  $('eventNew').onclick = () => {
+    if (!confirm('This will clear ALL events and reset to a fresh Default event. Continue?')) return;
+    const fresh = {
+      events: { Default: { log: [], dash: {}, rot: { serve: {}, so: {} } } },
+      currentEvent: 'Default',
+      roster: { Team: [], Opp: [] },
+      savedRosters: { Team: {}, Opp: {} },
+      zones: { Team: {1:null,6:null,5:null,2:null,3:null,4:null}, Opp: {1:null,6:null,5:null,2:null,3:null,4:null} },
+      sel: { side: null, zone: null },
+      cur: { side: '--', player: '', action: '', qual: '' },
+      rotationIndex: { Team: 1, Opp: 1 },
+      libero: { Team: { num: '', partners: [], enabled: false }, Opp: { num: '', partners: [], enabled: false } }
+    };
+    Object.keys(S).forEach(k => delete S[k]);
+    Object.assign(S, fresh);
+    save(S);
+    renderEvents();
+    renderAllFromEvent();
+    alert('New Default event started.');
+  };
+
+  // Saved rosters
   function renderSavedRosters(){ const tLoad=$('teamRosterLoad'), oLoad=$('oppRosterLoad'); tLoad.innerHTML=''; oLoad.innerHTML=''; Object.keys(S.savedRosters.Team).forEach(k=>{ const o=el('option','',k); o.value=k; tLoad.appendChild(o); }); Object.keys(S.savedRosters.Opp).forEach(k=>{ const o=el('option','',k); o.value=k; oLoad.appendChild(o); }); }
   $('teamRosterSave').onclick=()=>{ const name=$('teamRosterName').value.trim(); if(!name) return; S.savedRosters.Team[name]=[...S.roster.Team]; save(S); renderSavedRosters(); };
   $('teamRosterApply').onclick=()=>{ const key=$('teamRosterLoad').value; if(!key) return; S.roster.Team=[...S.savedRosters.Team[key]]; save(S); renderRoster('Team'); };
@@ -325,6 +352,7 @@
   $('oppRosterApply').onclick=()=>{ const key=$('oppRosterLoad').value; if(!key) return; S.roster.Opp=[...S.savedRosters.Opp[key]]; save(S); renderRoster('Opp'); };
   $('oppRosterDelete').onclick=()=>{ const key=$('oppRosterLoad').value; if(!key) return; delete S.savedRosters.Opp[key]; save(S); renderSavedRosters(); };
 
+  // Roster & court
   function addPlayer(side,num,name){ num=num2(num); if(!num||!name) return; if(S.roster[side].some(p=>p.num===num)) return; S.roster[side].push({num,name}); S.roster[side].sort((a,b)=>a.num.localeCompare(b.num)); save(S); renderRoster(side); }
   function removePlayer(side,num){ S.roster[side]=S.roster[side].filter(p=>p.num!==num); Object.keys(S.zones[side]).forEach(z=>{ if(S.zones[side][z]?.num===num) S.zones[side][z]=null; }); save(S); renderRoster(side); renderZones(); }
   function clearRoster(side){
@@ -338,11 +366,13 @@
   }
   function renderRoster(side){ const box=$(side==='Team'?'teamRoster':'oppRoster'); box.innerHTML=''; const L=S.libero[side]; S.roster[side].forEach(p=>{ const row=el('div','person'); const left=el('div'); left.appendChild(el('span','tag','#'+p.num)); left.appendChild(el('span','name',p.name+(L.num===p.num?' (L)':''))); const right=el('div','row'); const setBtn=el('button','btn accent','Assign'); setBtn.onclick=()=>assignSelected(side,p); const delBtn=el('button','btn ghost','Remove'); delBtn.onclick=()=>removePlayer(side,p.num); const partnerBtn=el('button','btn small', L.partners.includes(p.num)?'Partner ✓':'Partner'); partnerBtn.onclick=()=>{ const i=L.partners.indexOf(p.num); if(i>-1) L.partners.splice(i,1); else if(p.num!==L.num && L.partners.length<2) L.partners.push(p.num); save(S); renderRoster(side); renderZones(); }; right.appendChild(setBtn); right.appendChild(delBtn); right.appendChild(partnerBtn); row.appendChild(left); row.appendChild(right); box.appendChild(row); }); }
 
+  // Libero
   $('teamLibSet').onclick=()=>{ S.libero.Team.num=num2($('teamLibNum').value); if(S.libero.Team.partners.includes(S.libero.Team.num)) S.libero.Team.partners=S.libero.Team.partners.filter(x=>x!==S.libero.Team.num); save(S); renderRoster('Team'); renderZones(); };
   $('oppLibSet').onclick=()=>{ S.libero.Opp.num=num2($('oppLibNum').value); if(S.libero.Opp.partners.includes(S.libero.Opp.num)) S.libero.Opp.partners=S.libero.Opp.partners.filter(x=>x!==S.libero.Opp.num); save(S); renderRoster('Opp'); renderZones(); };
   $('teamLibAuto').onchange=e=>{ S.libero.Team.enabled=!!e.target.checked; save(S); renderZones(); };
   $('oppLibAuto').onchange=e=>{ S.libero.Opp.enabled=!!e.target.checked; save(S); renderZones(); };
 
+  // Court interactions
   function bindCourt(side){ [1,6,5,2,3,4].forEach(z=>{ const id=(side==='Team'?'team':'opp')+z; const elz=$(id); let t=null; elz.addEventListener('pointerdown',()=>{ t=setTimeout(()=>longClear(side,z),650);}); ['pointerup','pointerleave','pointercancel'].forEach(ev=>elz.addEventListener(ev,()=>{ if(t){clearTimeout(t); t=null;} })); elz.addEventListener('click',()=>selectZone(side,z)); }); }
   function selectZone(side,zone){ S.sel={side,zone}; const disp=getDisplayPlayer(side,zone); if(disp){ S.cur.side=side; S.cur.player=disp.num; } else { S.cur.side=side; S.cur.player=''; } renderHints(); renderZones(); updateDisplay(); save(S); }
   function longClear(side,zone){ if(!S.zones[side][zone]) return; if(confirm(`Clear ${side} Z${zone}?`)){ S.zones[side][zone]=null; if(S.cur.side===side && S.sel.zone===zone){ S.cur.player=''; } save(S); renderZones(); updateDisplay(); } }
@@ -359,24 +389,26 @@
 
   function renderZones(){ ['Team','Opp'].forEach(side=>{ Object.keys(S.zones[side]).forEach(z=>{ const zi=Number(z); const slot=$((side==='Team'?'team':'opp')+z); const disp=getDisplayPlayer(side,zi); const isActive = (S.sel.side===side && String(S.sel.zone)===String(z)); slot.classList.toggle('active', isActive); slot.classList.toggle('libero', !!(disp&&disp.isLib && BACKROW.has(zi))); const numEl=slot.querySelector('.num'); const nmEl=slot.querySelector('.pname'); if(disp){ numEl.textContent='#'+disp.num; nmEl.textContent=trunc(disp.name + (disp.isLib?' (L)':'')); } else { numEl.textContent=''; nmEl.textContent=''; } }); }); }
 
+  // Rotation
   const ROT=[1,6,5,4,3,2];
   function rotate(side,dir){ const cur=S.zones[side]; const arr=ROT.map(z=>cur[z]); if(dir==='cw') arr.unshift(arr.pop()); else arr.push(arr.shift()); ROT.forEach((z,i)=>cur[z]=arr[i]); S.rotationIndex[side] = ((S.rotationIndex[side] + (dir==='cw'?1:-1) -1 + 6) % 6) + 1; save(S); renderZones(); }
   ;['Team','Opp'].forEach(bindCourt);
-  document.getElementById('teamRotateCW').onclick=()=>rotate('Team','cw');
-  document.getElementById('teamRotateCCW').onclick=()=>rotate('Team','ccw');
-  document.getElementById('oppRotateCW').onclick=()=>rotate('Opp','cw');
-  document.getElementById('oppRotateCCW').onclick=()=>rotate('Opp','ccw');
-  document.getElementById('teamClearCourt').onclick=()=>{ Object.keys(S.zones.Team).forEach(z=>S.zones.Team[z]=null); save(S); renderZones(); };
-  document.getElementById('oppClearCourt').onclick=()=>{ Object.keys(S.zones.Opp).forEach(z=>S.zones.Opp[z]=null); save(S); renderZones(); };
+  $('teamRotateCW').onclick=()=>rotate('Team','cw');
+  $('teamRotateCCW').onclick=()=>rotate('Team','ccw');
+  $('oppRotateCW').onclick=()=>rotate('Opp','cw');
+  $('oppRotateCCW').onclick=()=>rotate('Opp','ccw');
+  $('teamClearCourt').onclick=()=>{ Object.keys(S.zones.Team).forEach(z=>S.zones.Team[z]=null); save(S); renderZones(); };
+  $('oppClearCourt').onclick=()=>{ Object.keys(S.zones.Opp).forEach(z=>S.zones.Opp[z]=null); save(S); renderZones(); };
 
+  // Logger
   const codeEl=$('code'), pillSide=$('pillSide'), pillP=$('pillPlayer'), pillA=$('pillAction'), pillQ=$('pillQual');
   function updateDisplay(){ const code=(S.cur.player && S.cur.action && S.cur.qual) ? (S.cur.player+S.cur.action+S.cur.qual) : (S.cur.player||'--'); codeEl.textContent=code||'--'; pillSide.textContent='Side: '+(S.cur.side||'--'); pillP.textContent='Player: '+(S.cur.player||'--'); pillA.textContent='Action: '+(S.cur.action||'--'); pillQ.textContent='Qualifier: '+(S.cur.qual||'--'); }
   $('actions').addEventListener('click',e=>{ const a=e.target.getAttribute('data-action'); if(!a) return; S.cur.action=a; S.cur.qual=''; renderQuals(); updateDisplay(); });
   function renderQuals(){ const box=$('quals'); box.innerHTML=''; (QUALS[S.cur.action]||[]).forEach(q=>{ const b=el('button','btn',q); b.addEventListener('click',()=>{ S.cur.qual=q; updateDisplay(); }); box.appendChild(b); }); }
 
+  // Dash helpers
   function dashKey(side,num){ return side+":"+num; }
   function bumpDash(side,num,name,action,qual){ const d=EVT().dash; const k=dashKey(side,num); if(!d[k]) d[k]={side,num,name}; const obj=d[k]; const key=action+qual; obj[key]=(obj[key]||0)+1; }
-
   function computeRallies(log){
     const rallies=[]; let cur=null;
     const startRally=(serveSide)=>{cur={serveSide, entries:[]}; rallies.push(cur);};
@@ -465,7 +497,7 @@
         {label:'DIG RATE', val:`${(dRate*100).toFixed(0)}%`},
         {label:'TOTAL DIGS', val:String(dTot)},
         {label:'BLOCK RATE', val:`${(bRate*100).toFixed(0)}%`},
-        {label:'SIDE OUT %', val:`${(soRate*100).toFixed(0)}%`}
+        {label:'SIDE OUT %', val=`${(soRate*100).toFixed(0)}%`}
       ];
       bubbles.forEach(b=>{ const k=el('div','kpi'); k.appendChild(el('div','label',b.label)); k.appendChild(el('div','value',b.val)); holder.appendChild(k); });
     }
@@ -473,6 +505,7 @@
     fillTable('Team'); fillTable('Opp'); renderKPI('Team'); renderKPI('Opp');
   }
 
+  // Log table + actions
   function appendRow(idx,r){
     const tr=el('tr');
     tr.innerHTML=`<td>${idx}</td><td>${r.time}</td><td>${r.side}</td><td><b>${r.code}</b></td><td>${r.num}</td><td>${r.name||''}</td><td>${r.action}</td><td>${r.qual}</td><td>${MEAN[r.action+r.qual]||''}</td><td class="table-actions"><button class="btn small delRow" data-i="${idx-1}">Delete</button></td>`;
@@ -486,6 +519,7 @@
   });
   function renderLog(){ const tb=$('log').querySelector('tbody'); tb.innerHTML=''; EVT().log.forEach((r,i)=>appendRow(i+1,r)); }
 
+  // Enter/reset/export/clear
   $('enter').addEventListener('click',()=>{
     if(S.cur.side==='--' || !S.cur.player || !S.cur.action || !S.cur.qual){ const msg='Tap a court slot → assign player → pick action → qualifier'; if($('code')) $('code').textContent=msg; return; }
     const side=S.cur.side; const num=S.cur.player; let byZone=null; Object.keys(S.zones[side]).forEach(z=>{ if(S.zones[side][z] && S.zones[side][z].num===num) byZone=S.zones[side][z]; });
@@ -498,9 +532,9 @@
   $('reset').addEventListener('click',()=>{ S.cur={side:'--',player:'',action:'',qual:''}; updateDisplay(); });
   $('exportCSV').onclick=()=>{
     const rows=[["event","time","side","num","name","action","qual","code"],...EVT().log.map(r=>[S.currentEvent,r.time,r.side,r.num,r.name,r.action,r.qual,(r.num+r.action+r.qual)])];
-    const csv=rows.map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\\n');
+    const csv=rows.map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\n');
     const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
-    const a=document.createElement('a'); a.href=url; a.download='wolfpack_logger_'+S.currentEvent.replace(/\\s+/g,'_')+'.csv'; a.click(); URL.revokeObjectURL(url);
+    const a=document.createElement('a'); a.href=url; a.download='wolfpack_logger_'+S.currentEvent.replace(/\s+/g,'_')+'.csv'; a.click(); URL.revokeObjectURL(url);
   };
   $('clearLog').onclick=()=>{
     const ok = confirm('Clear ALL logs for this event?');
@@ -513,35 +547,29 @@
     alert('All logs cleared for event: '+S.currentEvent);
   };
 
+  // Roster buttons
   $('teamAdd').onclick=()=>{ if($('teamNum').value && $('teamName').value){ addPlayer('Team', $('teamNum').value, $('teamName').value); $('teamNum').value=''; $('teamName').value=''; }};
-  $('teamClear').onclick=()=>{
-    const ok = confirm('Clear Team roster, libero, and court?');
-    if(!ok) return;
-    clearRoster('Team');
-    alert('Team roster and court cleared.');
-  };
+  $('teamClear').onclick=()=>{ if(confirm('Clear Team roster, libero, and court?')){ clearRoster('Team'); alert('Team roster and court cleared.'); } };
   $('oppAdd').onclick=()=>{ if($('oppNum').value && $('oppName').value){ addPlayer('Opp', $('oppNum').value, $('oppName').value); $('oppNum').value=''; $('oppName').value=''; }};
-  $('oppClear').onclick=()=>{
-    const ok = confirm('Clear Opponent roster, libero, and court?');
-    if(!ok) return;
-    clearRoster('Opp');
-    alert('Opponent roster and court cleared.');
-  };
+  $('oppClear').onclick=()=>{ if(confirm('Clear Opponent roster, libero, and court?')){ clearRoster('Opp'); alert('Opponent roster and court cleared.'); } };
 
+  // Boot
   ['Team','Opp'].forEach(side=>{ bindCourt(side); renderRoster(side); });
   function renderAllFromEvent(){ renderLog(); renderDash(); renderZones(); renderHints(); renderQuals(); updateDisplay(); renderRoster('Team'); renderRoster('Opp'); }
   renderEvents(); if($('eventSelect')) $('eventSelect').value=S.currentEvent; renderAllFromEvent(); renderSavedRosters();
-  $('eventSaveChanges').onclick=()=>{
-    S.events[S.currentEvent] = EVT();
-    save(S);
-    alert('Changes saved for event: '+S.currentEvent);
-  };
+  function renderHints(){ $('teamHint').textContent = (S.sel.side==='Team' && S.sel.zone) ? (`Selected: Team Z${S.sel.zone}`) : 'Selected: none'; $('oppHint').textContent = (S.sel.side==='Opp' && S.sel.zone) ? (`Selected: Opp Z${S.sel.zone}`) : 'Selected: none'; }
+  function renderQuals(){ const box=$('quals'); box.innerHTML=''; (QUALS[S.cur.action]||[]).forEach(q=>{ const b=el('button','btn',q); b.addEventListener('click',()=>{ S.cur.qual=q; updateDisplay(); }); box.appendChild(b); }); }
+  function updateDisplay(){ const code=(S.cur.player && S.cur.action && S.cur.qual) ? (S.cur.player+S.cur.action+S.cur.qual) : (S.cur.player||'--'); $('code').textContent=code||'--'; $('pillSide').textContent='Side: '+(S.cur.side||'--'); $('pillPlayer').textContent='Player: '+(S.cur.player||'--'); $('pillAction').textContent='Action: '+(S.cur.action||'--'); $('pillQual').textContent='Qualifier: '+(S.cur.qual||'--'); }
+
+  // Tabs init
+  function applyHash(){ const h=location.hash||'#logger'; const isDash=h==='#dash'; $('tabLogger').classList.toggle('active',!isDash); $('tabDash').classList.toggle('active',isDash); $('pageLogger').classList.toggle('active',!isDash); $('pageDash').classList.toggle('active',isDash); if(isDash) renderDash(); }
+  window.addEventListener('hashchange',applyHash);
   applyHash();
 })();
 </script>
 
 <script>
-// Register SW for homescreen/offline (same as your previous minimal setup)
+/* PWA: simple SW registration for GitHub Pages + homescreen */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./service-worker.js', { scope: './' }).catch(console.error);
