@@ -11,10 +11,7 @@
 <link rel="icon" href="logo.png">
 <title>WOLFPACK VOLLEYBALL</title>
 <style>
-  :root{
-    --bg:#ffffff; --card:#f9f9f9; --text:#000000; --muted:#6b7280; --line:#e5e7eb;
-    --accent:#ff7f11; --accent2:#ff9933;
-  }
+  :root{--bg:#ffffff;--card:#f9f9f9;--text:#000;--muted:#6b7280;--line:#e5e7eb;--accent:#ff7f11;}
   *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
   body{margin:0;background:var(--bg);color:var(--text)}
   header{position:sticky;top:0;z-index:40;background:#000;color:#fff;padding:14px 16px;font-weight:900;font-size:18px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -41,7 +38,7 @@
   .name{flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .court{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
   .slot{border:2px solid var(--line);border-radius:12px;min-height:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff;text-align:center;padding:8px;position:relative}
-  .slot .zone{position:absolute;top:6px;left:8px;font-size:11px;color:var(--accent)}
+  .slot .zone{position:absolute;top:6px;left:8px;font-size:11px;color:#ff7f11}
   .slot .num{font-weight:900;color:#000}
   .slot .pname{font-size:12px;color:#444}
   .slot.active{outline:3px solid var(--accent)}
@@ -87,10 +84,9 @@
           <select id="eventSelect" class="input" style="min-width:220px"></select>
           <input id="eventName" class="input" placeholder="New event name (e.g., Match vs Bears)">
           <button class="btn accent" id="eventAdd">Add Event</button>
-          <button class="btn" id="eventSave">Save Event</button>
+          <button class="btn" id="eventSave">Save All</button>
           <button class="btn" id="eventSaveChanges">Save Changes</button>
           <button class="btn ghost" id="eventDelete">Delete Event</button>
-          <!-- NEW -->
           <button class="btn" id="eventNew">New Event (Reset)</button>
         </div>
         <div class="sub">One event per match. Each event keeps its own log and dashboards.</div>
@@ -247,9 +243,11 @@
       <div id="kpiRowTeam" class="kpi-grid"></div>
       <table id="dashTeam"><thead><tr>
         <th>#</th><th>Name</th>
-        <th>Eff</th><th>K</th><th>E</th><th>Att</th>
-        <th>RecRate</th><th>RecTotal</th>
-        <th>DigRate</th><th>DigTotal</th>
+        <th title="Attack Efficiency = (AK − AE) / (AK + AE + AB + A−)">Eff</th><th>K</th><th>E</th><th title="Attempts = AK + AE + AB + A−">Att</th>
+        <th title="Receive Average = (3·R3 + 2·R2 + 1·R1)/Total">RecAvg</th>
+        <th title="Good Receive % = (R3+R2)/Total">GoodRec%</th>
+        <th>RecTotal</th>
+        <th title="Good Dig % = (D3+D2)/Total">GoodDig%</th><th>DigTotal</th>
         <th>SE</th><th>SA</th><th>ServPress</th>
         <th>BlockRate</th>
         <th>SO%</th>
@@ -261,13 +259,27 @@
       <div id="kpiRowOpp" class="kpi-grid"></div>
       <table id="dashOpp"><thead><tr>
         <th>#</th><th>Name</th>
-        <th>Eff</th><th>K</th><th>E</th><th>Att</th>
-        <th>RecRate</th><th>RecTotal</th>
-        <th>DigRate</th><th>DigTotal</th>
+        <th title="Attack Efficiency = (AK − AE) / (AK + AE + AB + A−)">Eff</th><th>K</th><th>E</th><th title="Attempts = AK + AE + AB + A−">Att</th>
+        <th title="Receive Average = (3·R3 + 2·R2 + 1·R1)/Total">RecAvg</th>
+        <th title="Good Receive % = (R3+R2)/Total">GoodRec%</th>
+        <th>RecTotal</th>
+        <th title="Good Dig % = (D3+D2)/Total">GoodDig%</th><th>DigTotal</th>
         <th>SE</th><th>SA</th><th>ServPress</th>
         <th>BlockRate</th>
         <th>SO%</th>
       </tr></thead><tbody></tbody></table>
+    </div>
+    <div class="card">
+      <h1>Metric Formulas</h1>
+      <div class="sub">
+        <div><b>Attack Efficiency</b> = (AK − AE) / (AK + AE + AB + A−)</div>
+        <div><b>Receive Average</b> = (3·R3 + 2·R2 + 1·R1 + 0·R0) / (R3 + R2 + R1 + R0)</div>
+        <div><b>Good Receive %</b> = (R3 + R2) / (R3 + R2 + R1 + R0)</div>
+        <div><b>Good Dig %</b> = (D3 + D2) / (D3 + D2 + D1 + D0)</div>
+        <div><b>Service Pressure</b> = (SA + S+) / (SA + S+ + S− + SE)</div>
+        <div><b>Block Rate</b> = BK / (BK + BE + BT)</div>
+        <div><b>Side Out %</b> = SO Success / SO Attempts</div>
+      </div>
     </div>
   </div>
 </div>
@@ -279,6 +291,9 @@
   const el=(t,cls,txt)=>{const e=document.createElement(t); if(cls) e.className=cls; if(txt!==undefined) e.textContent=txt; return e;};
   const num2=v=>String(v||'').replace(/\D/g,'').slice(-2).padStart(2,'0');
   const trunc=(s,n=18)=> (s||'').length>n ? s.slice(0,n-1)+'…' : (s||'');
+  const now=()=>new Date().toLocaleTimeString();
+
+  // Qualifiers & meanings
   const QUALS={ R:["3","2","1","0"], S:["A","+","-","E"], A:["K","B","-","E"], B:["K","T","M","E"], D:["3","2","1","0"], T:["3","2","1","0"], F:["Y","E"] };
   const MEAN={ R3:"Receive: excellent", R2:"Receive: good", R1:"Receive: poor", R0:"Receive: loss",
                SA:"Serve: ace", "S+":"Serve: tough", "S-":"Serve: neutral", SE:"Serve: error",
@@ -289,7 +304,7 @@
                FY:"Free ball: clean", FE:"Free ball: error" };
 
   // Persistent state
-  const LS='wpvb_events_roster_rot_v2_backrow2';
+  const LS='wpvb_events_roster_rot_v3';
   const load=()=>{ try{return JSON.parse(localStorage.getItem(LS)||'{}')}catch(e){return{}} };
   const save=s=>localStorage.setItem(LS,JSON.stringify(s));
   const defaultEvent='Default';
@@ -320,8 +335,6 @@
   $('eventDelete').onclick=()=>{ if(S.currentEvent===defaultEvent) return alert('Cannot delete Default event'); if(!confirm('Delete event "'+S.currentEvent+'"?')) return; delete S.events[S.currentEvent]; S.currentEvent=defaultEvent; save(S); renderEvents(); renderAllFromEvent(); };
   $('eventSelect').onchange=e=>{ S.currentEvent=e.target.value; save(S); renderAllFromEvent(); };
   $('eventSaveChanges').onclick=()=>{ S.events[S.currentEvent] = EVT(); save(S); alert('Changes saved for event: '+S.currentEvent); };
-
-  // NEW: Reset to fresh Default event
   $('eventNew').onclick = () => {
     if (!confirm('This will clear ALL events and reset to a fresh Default event. Continue?')) return;
     const fresh = {
@@ -338,8 +351,7 @@
     Object.keys(S).forEach(k => delete S[k]);
     Object.assign(S, fresh);
     save(S);
-    renderEvents();
-    renderAllFromEvent();
+    renderEvents(); renderAllFromEvent();
     alert('New Default event started.');
   };
 
@@ -364,7 +376,18 @@
     save(S);
     renderRoster(side); renderZones(); renderHints(); updateDisplay();
   }
-  function renderRoster(side){ const box=$(side==='Team'?'teamRoster':'oppRoster'); box.innerHTML=''; const L=S.libero[side]; S.roster[side].forEach(p=>{ const row=el('div','person'); const left=el('div'); left.appendChild(el('span','tag','#'+p.num)); left.appendChild(el('span','name',p.name+(L.num===p.num?' (L)':''))); const right=el('div','row'); const setBtn=el('button','btn accent','Assign'); setBtn.onclick=()=>assignSelected(side,p); const delBtn=el('button','btn ghost','Remove'); delBtn.onclick=()=>removePlayer(side,p.num); const partnerBtn=el('button','btn small', L.partners.includes(p.num)?'Partner ✓':'Partner'); partnerBtn.onclick=()=>{ const i=L.partners.indexOf(p.num); if(i>-1) L.partners.splice(i,1); else if(p.num!==L.num && L.partners.length<2) L.partners.push(p.num); save(S); renderRoster(side); renderZones(); }; right.appendChild(setBtn); right.appendChild(delBtn); right.appendChild(partnerBtn); row.appendChild(left); row.appendChild(right); box.appendChild(row); }); }
+  function renderRoster(side){ const box=(side==='Team'?$('teamRoster'):$('oppRoster')); box.innerHTML=''; const L=S.libero[side];
+    (S.roster[side]).forEach(p=>{
+      const row=el('div','person');
+      const left=el('div'); left.appendChild(el('span','tag','#'+p.num)); left.appendChild(el('span','name',p.name+(L.num===p.num?' (L)':'')));
+      const right=el('div','row');
+      const setBtn=el('button','btn accent','Assign'); setBtn.onclick=()=>assignSelected(side,p);
+      const delBtn=el('button','btn ghost','Remove'); delBtn.onclick=()=>removePlayer(side,p.num);
+      const partnerBtn=el('button','btn small', L.partners.includes(p.num)?'Partner ✓':'Partner');
+      partnerBtn.onclick=()=>{ const i=L.partners.indexOf(p.num); if(i>-1) L.partners.splice(i,1); else if(p.num!==L.num && L.partners.length<2) L.partners.push(p.num); save(S); renderRoster(side); renderZones(); };
+      right.appendChild(setBtn); right.appendChild(delBtn); right.appendChild(partnerBtn); row.appendChild(left); row.appendChild(right); box.appendChild(row);
+    });
+  }
 
   // Libero
   $('teamLibSet').onclick=()=>{ S.libero.Team.num=num2($('teamLibNum').value); if(S.libero.Team.partners.includes(S.libero.Team.num)) S.libero.Team.partners=S.libero.Team.partners.filter(x=>x!==S.libero.Team.num); save(S); renderRoster('Team'); renderZones(); };
@@ -409,6 +432,7 @@
   // Dash helpers
   function dashKey(side,num){ return side+":"+num; }
   function bumpDash(side,num,name,action,qual){ const d=EVT().dash; const k=dashKey(side,num); if(!d[k]) d[k]={side,num,name}; const obj=d[k]; const key=action+qual; obj[key]=(obj[key]||0)+1; }
+
   function computeRallies(log){
     const rallies=[]; let cur=null;
     const startRally=(serveSide)=>{cur={serveSide, entries:[]}; rallies.push(cur);};
@@ -430,26 +454,24 @@
   function renderDash(){
     const agg={};
     const ensure=(side,num,name)=>{const k=side+":"+num; if(!agg[k]) agg[k]={side,num,name}; return agg[k];};
-    EVT().log.forEach(r=>{
-      const a=ensure(r.side,r.num,r.name);
-      const key=r.action+(r.qual||'');
-      a[key]=(a[key]||0)+1;
-    });
+    EVT().log.forEach(r=>{ const a=ensure(r.side,r.num,r.name); const key=r.action+(r.qual||''); a[key]=(a[key]||0)+1; });
     const so=computeRallies(EVT().log);
     Object.entries(so.byPlayer).forEach(([k,v])=>{ agg[k]=agg[k]||{side:k.split(':')[0],num:k.split(':')[1],name:''}; agg[k].SOatt=(agg[k].SOatt||0)+v.att; agg[k].SOsucc=(agg[k].SOsucc||0)+v.succ; });
     const players=Object.values(agg);
-    const bySide={Team:[],Opp:[]};
-    players.forEach(d=>{ if(d.side==='Team') bySide.Team.push(d); else if(d.side==='Opp') bySide.Opp.push(d); });
+    const bySide={Team:[],Opp:[]}; players.forEach(d=>{ if(d.side==='Team') bySide.Team.push(d); else if(d.side==='Opp') bySide.Opp.push(d); });
 
     function fillTable(side){
       const tb=$(side==='Team'?'dashTeam':'dashOpp').querySelector('tbody');
       tb.innerHTML='';
       bySide[side].sort((a,b)=>a.num.localeCompare(b.num));
       bySide[side].forEach(d=>{
-        const att=(d.AK||0)+(d.AE||0)+(d['A-']||0);
-        const eff=att?(((d.AK||0)-(d.AE||0))/att):0;
-        const rTot=(d.R3||0)+(d.R2||0)+(d.R1||0)+(d.R0||0);
-        const rRate=rTot?(((d.R3||0)+(d.R2||0))/rTot):0;
+        const att=(d.AK||0)+(d.AE||0)+(d.AB||0)+(d['A-']||0);
+        const eff=att?(((d.AK||0)-(d.AE||0))/att):0; // UPDATED FORMULA
+        const r3=(d.R3||0), r2=(d.R2||0), r1=(d.R1||0), r0=(d.R0||0);
+        const rTot=r3+r2+r1+r0;
+        const rPts=3*r3+2*r2+1*r1;
+        const rAvg=rTot? (rPts/rTot):0;
+        const rRate=rTot? ((r3+r2)/rTot):0;
         const dTot=(d.D3||0)+(d.D2||0)+(d.D1||0)+(d.D0||0);
         const dRate=dTot?(((d.D3||0)+(d.D2||0))/dTot):0;
         const sTot=(d.SA||0)+(d['S+']||0)+(d['S-']||0)+(d.SE||0);
@@ -459,9 +481,11 @@
         const soAtt=d.SOatt||0, soSucc=d.SOsucc||0, soRate=soAtt?soSucc/soAtt:0;
         const tr=el('tr');
         tr.innerHTML=`<td>${d.num}</td><td>${d.name||''}</td>
-          <td>${(eff*100).toFixed(0)}%</td><td>${d.AK||0}</td><td>${d.AE||0}</td><td>${att}</td>
-          <td>${(rRate*100).toFixed(0)}%</td><td>${rTot}</td>
-          <td>${(dRate*100).toFixed(0)}%</td><td>${dTot}</td>
+          <td title="(AK−AE)/(AK+AE+AB+A−)">${(eff*100).toFixed(0)}%</td><td>${d.AK||0}</td><td>${d.AE||0}</td><td>${att}</td>
+          <td title="(3·R3+2·R2+1·R1)/Total">${rAvg.toFixed(2)}</td>
+          <td title="Good Receive = (R3+R2)/Total">${(rRate*100).toFixed(0)}%</td>
+          <td>${rTot}</td>
+          <td title="Good Dig = (D3+D2)/Total">${(dRate*100).toFixed(0)}%</td><td>${dTot}</td>
           <td>${d.SE||0}</td><td>${d.SA||0}</td><td>${(sPress*100).toFixed(0)}%</td>
           <td>${(bRate*100).toFixed(0)}%</td>
           <td>${(soRate*100).toFixed(0)}%</td>`;
@@ -472,12 +496,15 @@
     function renderKPI(side){
       const holder=$(side==='Team'?'kpiRowTeam':'kpiRowOpp');
       holder.innerHTML='';
-      const list=bySide[side];
+      const list=(side==='Team'?bySide.Team:bySide.Opp);
       const sum=(fn)=>list.reduce((t,d)=>t+fn(d),0);
-      const attTotal=sum(d=> (d.AK||0)+(d.AE||0)+(d['A-']||0));
-      const eff=attTotal? ( (sum(d=>d.AK||0) - sum(d=>d.AE||0)) / attTotal ):0;
-      const rTot=sum(d=>(d.R3||0)+(d.R2||0)+(d.R1||0)+(d.R0||0));
-      const rRate=rTot? ((sum(d=>(d.R3||0)+(d.R2||0)))/rTot):0;
+      const attTotal=sum(d=> (d.AK||0)+(d.AE||0)+(d.AB||0)+(d['A-']||0));
+      const eff=attTotal? ((sum(d=>d.AK||0) - sum(d=>d.AE||0)) / attTotal):0; // UPDATED FORMULA
+      const r3=sum(d=>d.R3||0), r2=sum(d=>d.R2||0), r1=sum(d=>d.R1||0), r0=sum(d=>d.R0||0);
+      const rTot=r3+r2+r1+r0;
+      const rPts=3*r3+2*r2+1*r1;
+      const rAvg=rTot? (rPts/rTot):0;
+      const rRate=rTot? ((r3+r2)/rTot):0;
       const dTot=sum(d=>(d.D3||0)+(d.D2||0)+(d.D1||0)+(d.D0||0));
       const dRate=dTot? ((sum(d=>(d.D3||0)+(d.D2||0)))/dTot):0;
       const sTot=sum(d=>(d.SA||0)+(d['S+']||0)+(d['S-']||0)+(d.SE||0));
@@ -492,12 +519,13 @@
         {label:'SERVICE ACES', val:String(sAces)},
         {label:'SERVICE ERRORS', val:String(sErr)},
         {label:'SERVICE PRESSURE', val:`${(sPress*100).toFixed(0)}%`},
-        {label:'RECEIVE RATE', val:`${(rRate*100).toFixed(0)}%`},
+        {label:'RECEIVE AVERAGE (0–3)', val:rAvg.toFixed(2)},
+        {label:'GOOD RECEIVE %', val:`${(rRate*100).toFixed(0)}%`},
         {label:'TOTAL RECEIVES', val:String(rTot)},
-        {label:'DIG RATE', val:`${(dRate*100).toFixed(0)}%`},
+        {label:'GOOD DIG %', val:`${(dRate*100).toFixed(0)}%`},
         {label:'TOTAL DIGS', val:String(dTot)},
         {label:'BLOCK RATE', val:`${(bRate*100).toFixed(0)}%`},
-        {label:'SIDE OUT %', val=`${(soRate*100).toFixed(0)}%`}
+        {label:'SIDE OUT %', val:`${(soRate*100).toFixed(0)}%`}
       ];
       bubbles.forEach(b=>{ const k=el('div','kpi'); k.appendChild(el('div','label',b.label)); k.appendChild(el('div','value',b.val)); holder.appendChild(k); });
     }
@@ -521,10 +549,10 @@
 
   // Enter/reset/export/clear
   $('enter').addEventListener('click',()=>{
-    if(S.cur.side==='--' || !S.cur.player || !S.cur.action || !S.cur.qual){ const msg='Tap a court slot → assign player → pick action → qualifier'; if($('code')) $('code').textContent=msg; return; }
+    if(S.cur.side==='--' || !S.cur.player || !S.cur.action || !S.cur.qual){ $('code').textContent='Tap a court slot → assign player → pick action → qualifier'; return; }
     const side=S.cur.side; const num=S.cur.player; let byZone=null; Object.keys(S.zones[side]).forEach(z=>{ if(S.zones[side][z] && S.zones[side][z].num===num) byZone=S.zones[side][z]; });
     const byRoster=S.roster[side].find(p=>p.num===num); const name=(byZone&&byZone.name) || (byRoster&&byRoster.name) || '';
-    const row={time:new Date().toLocaleTimeString(), side, num, name, action:S.cur.action, qual:S.cur.qual}; row.code=num+row.action+row.qual;
+    const row={time:now(), side, num, name, action:S.cur.action, qual:S.cur.qual}; row.code=num+row.action+row.qual;
     EVT().log.push(row); bumpDash(side,num,name,row.action,row.qual); save(S);
     renderLog(); renderDash();
     S.cur.player=''; S.cur.qual=''; updateDisplay();
@@ -532,18 +560,15 @@
   $('reset').addEventListener('click',()=>{ S.cur={side:'--',player:'',action:'',qual:''}; updateDisplay(); });
   $('exportCSV').onclick=()=>{
     const rows=[["event","time","side","num","name","action","qual","code"],...EVT().log.map(r=>[S.currentEvent,r.time,r.side,r.num,r.name,r.action,r.qual,(r.num+r.action+r.qual)])];
-    const csv=rows.map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\n');
+    const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download='wolfpack_logger_'+S.currentEvent.replace(/\s+/g,'_')+'.csv'; a.click(); URL.revokeObjectURL(url);
   };
   $('clearLog').onclick=()=>{
-    const ok = confirm('Clear ALL logs for this event?');
-    if(!ok) return;
-    const ev=EVT();
-    ev.log=[]; ev.dash={}; ev.rot={ serve:{}, so:{} };
-    save(S);
-    renderLog(); renderDash(); renderZones(); updateDisplay();
-    const c=$('code'); if(c) c.textContent='--';
+    if(!confirm('Clear ALL logs for this event?')) return;
+    const ev=EVT(); ev.log=[]; ev.dash={}; ev.rot={ serve:{}, so:{} };
+    save(S); renderLog(); renderDash(); renderZones(); updateDisplay();
+    $('code').textContent='--';
     alert('All logs cleared for event: '+S.currentEvent);
   };
 
@@ -556,20 +581,12 @@
   // Boot
   ['Team','Opp'].forEach(side=>{ bindCourt(side); renderRoster(side); });
   function renderAllFromEvent(){ renderLog(); renderDash(); renderZones(); renderHints(); renderQuals(); updateDisplay(); renderRoster('Team'); renderRoster('Opp'); }
-  renderEvents(); if($('eventSelect')) $('eventSelect').value=S.currentEvent; renderAllFromEvent(); renderSavedRosters();
-  function renderHints(){ $('teamHint').textContent = (S.sel.side==='Team' && S.sel.zone) ? (`Selected: Team Z${S.sel.zone}`) : 'Selected: none'; $('oppHint').textContent = (S.sel.side==='Opp' && S.sel.zone) ? (`Selected: Opp Z${S.sel.zone}`) : 'Selected: none'; }
-  function renderQuals(){ const box=$('quals'); box.innerHTML=''; (QUALS[S.cur.action]||[]).forEach(q=>{ const b=el('button','btn',q); b.addEventListener('click',()=>{ S.cur.qual=q; updateDisplay(); }); box.appendChild(b); }); }
-  function updateDisplay(){ const code=(S.cur.player && S.cur.action && S.cur.qual) ? (S.cur.player+S.cur.action+S.cur.qual) : (S.cur.player||'--'); $('code').textContent=code||'--'; $('pillSide').textContent='Side: '+(S.cur.side||'--'); $('pillPlayer').textContent='Player: '+(S.cur.player||'--'); $('pillAction').textContent='Action: '+(S.cur.action||'--'); $('pillQual').textContent='Qualifier: '+(S.cur.qual||'--'); }
-
-  // Tabs init
-  function applyHash(){ const h=location.hash||'#logger'; const isDash=h==='#dash'; $('tabLogger').classList.toggle('active',!isDash); $('tabDash').classList.toggle('active',isDash); $('pageLogger').classList.toggle('active',!isDash); $('pageDash').classList.toggle('active',isDash); if(isDash) renderDash(); }
-  window.addEventListener('hashchange',applyHash);
+  renderEvents(); if($('eventSelect')) $('eventSelect').value=S.currentEvent; renderAllFromEvent();
   applyHash();
 })();
 </script>
 
 <script>
-/* PWA: simple SW registration for GitHub Pages + homescreen */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./service-worker.js', { scope: './' }).catch(console.error);
