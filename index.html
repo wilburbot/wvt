@@ -65,7 +65,7 @@
 <body>
 <header>
   <span style="display:flex;align-items:center;gap:12px">
-    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAABP0klEQVR4nO1dd3wU1fb/njOzm80mhBAgIQQCofcOAmJFilhQKY" style="height:40px" alt="TRU WolfPack Logo">
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAA" style="height:40px" alt="TRU WolfPack Logo">
     <span>WOLFPACK VOLLEYBALL</span>
   </span>
   <nav class="nav">
@@ -243,14 +243,12 @@
       <div id="kpiRowTeam" class="kpi-grid"></div>
       <table id="dashTeam"><thead><tr>
         <th>#</th><th>Name</th>
-        <th title="Attack Efficiency = (AK − AE) / (AK + AE + AB + A−)">Eff</th><th>K</th><th>E</th><th title="Attempts = AK + AE + AB + A−">Att</th>
-        <th title="Receive Average = (3·R3 + 2·R2 + 1·R1)/Total">RecAvg</th>
-        <th title="Good Receive % = (R3+R2)/Total">GoodRec%</th>
-        <th>RecTotal</th>
-        <th title="Good Dig % = (D3+D2)/Total">GoodDig%</th><th>DigTotal</th>
+        <th>Eff</th><th>K</th><th>E</th><th>Att</th>
+        <th>Good Rec%</th><th>RecTotal</th>
+        <th>Good Dig%</th><th>DigTotal</th>
         <th>SE</th><th>SA</th><th>ServPress</th>
         <th>BlockRate</th>
-        <th>SO%</th>
+        <th>SO%</th><th>BE</th><th>+/-</th>
       </tr></thead><tbody></tbody></table>
     </div>
     <div class="card">
@@ -259,28 +257,16 @@
       <div id="kpiRowOpp" class="kpi-grid"></div>
       <table id="dashOpp"><thead><tr>
         <th>#</th><th>Name</th>
-        <th title="Attack Efficiency = (AK − AE) / (AK + AE + AB + A−)">Eff</th><th>K</th><th>E</th><th title="Attempts = AK + AE + AB + A−">Att</th>
-        <th title="Receive Average = (3·R3 + 2·R2 + 1·R1)/Total">RecAvg</th>
-        <th title="Good Receive % = (R3+R2)/Total">GoodRec%</th>
-        <th>RecTotal</th>
-        <th title="Good Dig % = (D3+D2)/Total">GoodDig%</th><th>DigTotal</th>
+        <th>Eff</th><th>K</th><th>E</th><th>Att</th>
+        <th>Good Rec%</th><th>RecTotal</th>
+        <th>Good Dig%</th><th>DigTotal</th>
         <th>SE</th><th>SA</th><th>ServPress</th>
         <th>BlockRate</th>
-        <th>SO%</th>
+        <th>SO%</th><th>BE</th><th>+/-</th>
       </tr></thead><tbody></tbody></table>
     </div>
     <div class="card">
-      <h1>Metric Formulas</h1>
-      <div class="sub">
-        <div><b>Attack Efficiency</b> = (AK − AE) / (AK + AE + AB + A−)</div>
-        <div><b>Receive Average</b> = (3·R3 + 2·R2 + 1·R1 + 0·R0) / (R3 + R2 + R1 + R0)</div>
-        <div><b>Good Receive %</b> = (R3 + R2) / (R3 + R2 + R1 + R0)</div>
-        <div><b>Good Dig %</b> = (D3 + D2) / (D3 + D2 + D1 + D0)</div>
-        <div><b>Service Pressure</b> = (SA + S+) / (SA + S+ + S− + SE)</div>
-        <div><b>Block Rate</b> = BK / (BK + BE + BT)</div>
-        <div><b>Side Out %</b> = SO Success / SO Attempts</div>
-      </div>
-    </div>
+      $1<div><b>\+/−</b> = (AK + SA + BK) − (AE + AB + SE + BE)</div>$2
   </div>
 </div>
 
@@ -435,7 +421,7 @@
 
   function computeRallies(log){
     const rallies=[]; let cur=null;
-    const startRally=(serveSide)=>{cur={serveSide, entries:[]}; rallies.push(cur);};
+    const startRally=(serveSide)=>{cur={serveSide, entries:[]}; rallies.push(cur)};
     log.forEach(e=>{
       if(e.action==='S') { startRally(e.side); }
       if(!rallies.length) startRally(e.side||'Team');
@@ -461,34 +447,31 @@
     const bySide={Team:[],Opp:[]}; players.forEach(d=>{ if(d.side==='Team') bySide.Team.push(d); else if(d.side==='Opp') bySide.Opp.push(d); });
 
     function fillTable(side){
-      const tb=$(side==='Team'?'dashTeam':'dashOpp').querySelector('tbody');
+      const tb=(side==='Team'?$('dashTeam'):$('dashOpp')).querySelector('tbody');
       tb.innerHTML='';
       bySide[side].sort((a,b)=>a.num.localeCompare(b.num));
       bySide[side].forEach(d=>{
-        const att=(d.AK||0)+(d.AE||0)+(d.AB||0)+(d['A-']||0);
-        const eff=att?(((d.AK||0)-(d.AE||0))/att):0; // UPDATED FORMULA
-        const r3=(d.R3||0), r2=(d.R2||0), r1=(d.R1||0), r0=(d.R0||0);
-        const rTot=r3+r2+r1+r0;
-        const rPts=3*r3+2*r2+1*r1;
-        const rAvg=rTot? (rPts/rTot):0;
-        const rRate=rTot? ((r3+r2)/rTot):0;
+        const att=(d.AK||0)+(d.AE||0)+(d['A-']||0)+(d.AB||0);
+        const eff=att?(((d.AK||0)-(d.AE||0))/att):0; /* updated formula (AK-AE)/(AK+AE+AB+A-) */
+        const rTot=(d.R3||0)+(d.R2||0)+(d.R1||0)+(d.R0||0);
+        const rRate=rTot?(((d.R3||0)+(d.R2||0))/rTot):0; /* Good Receive % */
         const dTot=(d.D3||0)+(d.D2||0)+(d.D1||0)+(d.D0||0);
-        const dRate=dTot?(((d.D3||0)+(d.D2||0))/dTot):0;
+        const dRate=dTot?(((d.D3||0)+(d.D2||0))/dTot):0; /* Good Dig % */
         const sTot=(d.SA||0)+(d['S+']||0)+(d['S-']||0)+(d.SE||0);
         const sPress=sTot?(((d.SA||0)+(d['S+']||0))/sTot):0;
         const bTot=(d.BK||0)+(d.BE||0)+(d.BT||0);
         const bRate=bTot?((d.BK||0)/bTot):0;
         const soAtt=d.SOatt||0, soSucc=d.SOsucc||0, soRate=soAtt?soSucc/soAtt:0;
+        const be=d.BE||0;
+        const plusMinus=(d.AK||0)+(d.SA||0)+(d.BK||0) - ((d.AE||0)+(d.AB||0)+(d.SE||0)+(d.BE||0));
         const tr=el('tr');
         tr.innerHTML=`<td>${d.num}</td><td>${d.name||''}</td>
-          <td title="(AK−AE)/(AK+AE+AB+A−)">${(eff*100).toFixed(0)}%</td><td>${d.AK||0}</td><td>${d.AE||0}</td><td>${att}</td>
-          <td title="(3·R3+2·R2+1·R1)/Total">${rAvg.toFixed(2)}</td>
-          <td title="Good Receive = (R3+R2)/Total">${(rRate*100).toFixed(0)}%</td>
-          <td>${rTot}</td>
-          <td title="Good Dig = (D3+D2)/Total">${(dRate*100).toFixed(0)}%</td><td>${dTot}</td>
+          <td>${(eff*100).toFixed(0)}%</td><td>${d.AK||0}</td><td>${d.AE||0}</td><td>${att}</td>
+          <td>${(rRate*100).toFixed(0)}%</td><td>${rTot}</td>
+          <td>${(dRate*100).toFixed(0)}%</td><td>${dTot}</td>
           <td>${d.SE||0}</td><td>${d.SA||0}</td><td>${(sPress*100).toFixed(0)}%</td>
           <td>${(bRate*100).toFixed(0)}%</td>
-          <td>${(soRate*100).toFixed(0)}%</td>`;
+          <td>${(soRate*100).toFixed(0)}%</td><td>${be}</td><td style="color:${plusMinus<0?'red':'green'}">${plusMinus}</td>`;
         tb.appendChild(tr);
       });
     }
