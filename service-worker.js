@@ -3,6 +3,8 @@ self.addEventListener('install', e => {
     caches.open('wolfpack-cache').then(cache => {
       return cache.addAll([
         './index.html',
+        './logo-16.png',
+        './logo-32.png',
         './logo-192.png',
         './logo-512.png',
         './site.webmanifest'
