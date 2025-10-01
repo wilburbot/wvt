@@ -6,9 +6,14 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#000000">
+
+<!-- Icons / Manifest -->
+<link rel="manifest" href="site.webmanifest">
+<link rel="icon" type="image/png" sizes="16x16" href="logo-16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="logo-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="logo-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-<link rel="manifest" href="site.webmanifest">
+
 <title>WOLFPACK VOLLEYBALL</title>
 <style>
   :root{--bg:#ffffff;--card:#f9f9f9;--text:#000;--muted:#6b7280;--line:#e5e7eb;--accent:#ff7f11;}
@@ -65,7 +70,7 @@
 <body>
 <header>
   <span style="display:flex;align-items:center;gap:12px">
-   <img src="logo-192.png" alt="TRU WolfPack Logo" style="height:40px" onerror="this.src='logo-32.png'">
+    <img src="logo-192.png" alt="TRU WolfPack Logo" style="height:40px" onerror="this.src='logo-32.png'">
     <span>WOLFPACK VOLLEYBALL</span>
   </span>
   <nav class="nav">
@@ -84,10 +89,9 @@
           <select id="eventSelect" class="input" style="min-width:220px"></select>
           <input id="eventName" class="input" placeholder="New event name (e.g., Match vs Bears)">
           <button class="btn accent" id="eventAdd">Add Event</button>
-          <button class="btn" id="eventSave">Save All Matches</button>
           <button class="btn" id="eventSaveChanges">Save Current Match</button>
           <button class="btn ghost" id="eventDelete">Delete Event</button>
-          <button class="btn" id="eventNew">New Event (Reset)</button>
+          <button class="btn" id="eventNew">New Event</button>
         </div>
         <div class="sub">One event per match. Each event keeps its own log and dashboards.</div>
       </div>
@@ -265,21 +269,23 @@
         <th>SO%</th><th>BE</th><th>+/-</th>
       </tr></thead><tbody></tbody></table>
     </div>
-   <div class="card" id="metricsFormulas">
-  <h1>Metrics — Formulas</h1>
-  <div class="sub">How each KPI is computed. Counts are per player or team as shown in the dashboards.</div>
-  <ul style="margin:0;padding-left:18px;line-height:1.6">
-    <li><b>Attack Efficiency</b> = <code>(AK − AE) / (AK + AE + AB + A-)</code></li>
-    <li><b>Good Dig %</b> = <code>(D3 + D2) / (D3 + D2 + D1 + D0)</code></li>
-    <li><b>Good Receive %</b> = <code>(R3 + R2) / (R3 + R2 + R1 + R0)</code></li>
-    <li><b>Receive Average (0–3)</b> = <code>(3·R3 + 2·R2 + 1·R1 + 0·R0) / (R3 + R2 + R1 + R0)</code></li>
-    <li><b>Block Rate</b> = <code>BK / (BK + BT + BE)</code></li>
-    <li><b>Side Out %</b> = <code>Side-out successes / Side-out opportunities</code>
-      <div class="sub" style="margin-top:4px">Opportunities are rallies started by opponent serve; a success is a point won by the receiving team (we credit the side-out to the rally’s kill by the receiving team).</div>
-    </li>
-    <li><b>+/−</b> = <code>(AK + SA + BK) − (AE + AB + SE + BE)</code></li>
-  </ul>
-</div>
+
+    <!-- Metrics — Formulas -->
+    <div class="card" id="metricsFormulas">
+      <h1>Metrics — Formulas</h1>
+      <div class="sub">How each KPI is computed. Counts are per player or team as shown in the dashboards.</div>
+      <ul style="margin:0;padding-left:18px;line-height:1.6">
+        <li><b>Attack Efficiency</b> = <code>(AK − AE) / (AK + AE + AB + A-)</code></li>
+        <li><b>Good Dig %</b> = <code>(D3 + D2) / (D3 + D2 + D1 + D0)</code></li>
+        <li><b>Good Receive %</b> = <code>(R3 + R2) / (R3 + R2 + R1 + R0)</code></li>
+        <li><b>Receive Average (0–3)</b> = <code>(3·R3 + 2·R2 + 1·R1 + 0·R0) / (R3 + R2 + R1 + R0)</code></li>
+        <li><b>Block Rate</b> = <code>BK / (BK + BT + BE)</code></li>
+        <li><b>Side Out %</b> = <code>Side-out successes / Side-out opportunities</code>
+          <div class="sub" style="margin-top:4px">Opportunities are rallies started by opponent serve; a success is a point won by the receiving team (we credit the side-out to the rally’s kill by the receiving team).</div>
+        </li>
+        <li><b>+/−</b> = <code>(AK + SA + BK) − (AE + AB + SE + BE)</code></li>
+      </ul>
+    </div>
   </div>
 </div>
 
@@ -331,28 +337,22 @@ document.addEventListener('DOMContentLoaded', () => {
   // Event mgmt
   function renderEvents(){ const sel=$('eventSelect'); sel.innerHTML=''; Object.keys(S.events).forEach(k=>{ const o=el('option','',k); o.value=k; if(k===S.currentEvent) o.selected=true; sel.appendChild(o); }); }
   $('eventAdd').onclick=()=>{ const name=$('eventName').value.trim(); if(!name) return; if(!S.events[name]) S.events[name]={log:[],dash:{},rot:{serve:{},so:{}}}; S.currentEvent=name; $('eventName').value=''; save(S); renderEvents(); renderAllFromEvent(); };
-  $('eventSave').onclick=()=>{ save(S); alert('All matches saved. Current: '+S.currentEvent); };
   $('eventDelete').onclick=()=>{ if(S.currentEvent===defaultEvent) return alert('Cannot delete Default event'); if(!confirm('Delete event "'+S.currentEvent+'"?')) return; delete S.events[S.currentEvent]; S.currentEvent=defaultEvent; save(S); renderEvents(); renderAllFromEvent(); };
   $('eventSelect').onchange=e=>{ S.currentEvent=e.target.value; save(S); renderAllFromEvent(); };
   $('eventSaveChanges').onclick=()=>{ S.events[S.currentEvent] = EVT(); save(S); alert('Current match saved: '+S.currentEvent); };
+
+  // New behavior: New Event auto-saves and creates "Default / Default 2 / Default 3 / ..."
   $('eventNew').onclick = () => {
-    if (!confirm('This will clear ALL events and reset to a fresh Default event. Continue?')) return;
-    const fresh = {
-      events: { Default: { log: [], dash: {}, rot: { serve: {}, so: {} } } },
-      currentEvent: 'Default',
-      roster: { Team: [], Opp: [] },
-      savedRosters: { Team: {}, Opp: {} },
-      zones: { Team: {1:null,6:null,5:null,2:null,3:null,4:null}, Opp: {1:null,6:null,5:null,2:null,3:null,4:null} },
-      sel: { side: null, zone: null },
-      cur: { side: '--', player: '', action: '', qual: '' },
-      rotationIndex: { Team: 1, Opp: 1 },
-      libero: { Team: { num: '', partners: [], enabled: false }, Opp: { num: '', partners: [], enabled: false } }
-    };
-    Object.keys(S).forEach(k => delete S[k]);
-    Object.assign(S, fresh);
+    save(S); // persist current state first
+    const base = 'Default';
+    let name = base;
+    let i = 1;
+    while (S.events[name]) { i += 1; name = `${base} ${i}`; }
+    S.events[name] = { log: [], dash: {}, rot: { serve: {}, so: {} } };
+    S.currentEvent = name;
     save(S);
     renderEvents(); renderAllFromEvent();
-    alert('New Default event started.');
+    alert('Started new event: ' + name);
   };
 
   // Saved rosters
@@ -466,7 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
       bySide[side].sort((a,b)=>a.num.localeCompare(b.num));
       bySide[side].forEach(d=>{
         const att=(d.AK||0)+(d.AE||0)+(d['A-']||0)+(d.AB||0);
-        const eff=att?(((d.AK||0)-(d.AE||0))/att):0; /* updated formula (AK-AE)/(AK+AE+AB+A-) */
+        const eff=att?(((d.AK||0)-(d.AE||0))/att):0; /* (AK-AE)/(AK+AE+AB+A-) */
         const rTot=(d.R3||0)+(d.R2||0)+(d.R1||0)+(d.R0||0);
         const rRate=rTot?(((d.R3||0)+(d.R2||0))/rTot):0; /* Good Receive % */
         const dTot=(d.D3||0)+(d.D2||0)+(d.D1||0)+(d.D0||0);
@@ -496,7 +496,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const list=(side==='Team'?bySide.Team:bySide.Opp);
       const sum=(fn)=>list.reduce((t,d)=>t+fn(d),0);
       const attTotal=sum(d=> (d.AK||0)+(d.AE||0)+(d.AB||0)+(d['A-']||0));
-      const eff=attTotal? ((sum(d=>d.AK||0) - sum(d=>d.AE||0)) / attTotal):0; // UPDATED FORMULA
+      const eff=attTotal? ((sum(d=>d.AK||0) - sum(d=>d.AE||0)) / attTotal):0;
       const r3=sum(d=>d.R3||0), r2=sum(d=>d.R2||0), r1=sum(d=>d.R1||0), r0=sum(d=>d.R0||0);
       const rTot=r3+r2+r1+r0;
       const rPts=3*r3+2*r2+1*r1;
