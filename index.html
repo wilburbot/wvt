@@ -65,7 +65,8 @@
 <body>
 <header>
   <span style="display:flex;align-items:center;gap:12px">
-    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAA" style="height:40px" alt="TRU WolfPack Logo">
+    <!-- Inline tiny placeholder to avoid 404 on github pages if logo missing -->
+    <img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" style="height:40px" alt="TRU WolfPack Logo">
     <span>WOLFPACK VOLLEYBALL</span>
   </span>
   <nav class="nav">
@@ -84,8 +85,8 @@
           <select id="eventSelect" class="input" style="min-width:220px"></select>
           <input id="eventName" class="input" placeholder="New event name (e.g., Match vs Bears)">
           <button class="btn accent" id="eventAdd">Add Event</button>
-          <button class="btn" id="eventSave">Save All</button>
-          <button class="btn" id="eventSaveChanges">Save Changes</button>
+          <button class="btn" id="eventSave">Save All Matches</button>
+          <button class="btn" id="eventSaveChanges">Save Current Match</button>
           <button class="btn ghost" id="eventDelete">Delete Event</button>
           <button class="btn" id="eventNew">New Event (Reset)</button>
         </div>
@@ -267,10 +268,12 @@
     </div>
     <div class="card">
       <div><b>+/−</b> = (AK + SA + BK) − (AE + AB + SE + BE)</div>
+    </div>
   </div>
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', () => {
 (function(){
   'use strict';
   const $=id=>document.getElementById(id);
@@ -317,10 +320,10 @@
   // Event mgmt
   function renderEvents(){ const sel=$('eventSelect'); sel.innerHTML=''; Object.keys(S.events).forEach(k=>{ const o=el('option','',k); o.value=k; if(k===S.currentEvent) o.selected=true; sel.appendChild(o); }); }
   $('eventAdd').onclick=()=>{ const name=$('eventName').value.trim(); if(!name) return; if(!S.events[name]) S.events[name]={log:[],dash:{},rot:{serve:{},so:{}}}; S.currentEvent=name; $('eventName').value=''; save(S); renderEvents(); renderAllFromEvent(); };
-  $('eventSave').onclick=()=>{ save(S); alert('All events saved. Current: '+S.currentEvent); };
+  $('eventSave').onclick=()=>{ save(S); alert('All matches saved. Current: '+S.currentEvent); };
   $('eventDelete').onclick=()=>{ if(S.currentEvent===defaultEvent) return alert('Cannot delete Default event'); if(!confirm('Delete event "'+S.currentEvent+'"?')) return; delete S.events[S.currentEvent]; S.currentEvent=defaultEvent; save(S); renderEvents(); renderAllFromEvent(); };
   $('eventSelect').onchange=e=>{ S.currentEvent=e.target.value; save(S); renderAllFromEvent(); };
-  $('eventSaveChanges').onclick=()=>{ S.events[S.currentEvent] = EVT(); save(S); alert('Changes saved for event: '+S.currentEvent); };
+  $('eventSaveChanges').onclick=()=>{ S.events[S.currentEvent] = EVT(); save(S); alert('Current match saved: '+S.currentEvent); };
   $('eventNew').onclick = () => {
     if (!confirm('This will clear ALL events and reset to a fresh Default event. Continue?')) return;
     const fresh = {
@@ -421,7 +424,7 @@
 
   function computeRallies(log){
     const rallies=[]; let cur=null;
-    const startRally=(serveSide)=>{cur={serveSide, entries:[]}; rallies.push(cur)};
+    const startRally=(serveSide)=>{cur={serveSide, entries:[]}; rallies.push(cur);};
     log.forEach(e=>{
       if(e.action==='S') { startRally(e.side); }
       if(!rallies.length) startRally(e.side||'Team');
@@ -566,7 +569,16 @@
   function renderAllFromEvent(){ renderLog(); renderDash(); renderZones(); renderHints(); renderQuals(); updateDisplay(); renderRoster('Team'); renderRoster('Opp'); }
   renderEvents(); if($('eventSelect')) $('eventSelect').value=S.currentEvent; renderAllFromEvent();
   applyHash();
+
+  // --- Minimal self-tests (won't affect UI) ---
+  try{
+    console.assert(typeof EVT==='function','EVT function missing');
+    console.assert(document.getElementById('actions'), '#actions missing');
+    console.assert(document.getElementById('dashTeam'), '#dashTeam missing');
+  }catch(err){ console.warn('Self-test warning:', err); }
+
 })();
+});
 </script>
 
 <script>
