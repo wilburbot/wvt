@@ -6,9 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#000000">
-<link rel="manifest" href="site.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="logo-192.png">
-<link rel="apple-touch-icon" href="logo-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
 <title>WOLFPACK VOLLEYBALL</title>
 <style>
   :root{--bg:#ffffff;--card:#f9f9f9;--text:#000;--muted:#6b7280;--line:#e5e7eb;--accent:#ff7f11;}
@@ -65,8 +65,7 @@
 <body>
 <header>
   <span style="display:flex;align-items:center;gap:12px">
-    <!-- Inline tiny placeholder to avoid 404 on github pages if logo missing -->
-    <img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" style="height:40px" alt="TRU WolfPack Logo">
+   <img src="logo-192.png" alt="TRU WolfPack Logo" style="height:40px" onerror="this.src='logo-32.png'">
     <span>WOLFPACK VOLLEYBALL</span>
   </span>
   <nav class="nav">
