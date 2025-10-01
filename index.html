@@ -266,9 +266,21 @@
         <th>SO%</th><th>BE</th><th>+/-</th>
       </tr></thead><tbody></tbody></table>
     </div>
-    <div class="card">
-      <div><b>+/−</b> = (AK + SA + BK) − (AE + AB + SE + BE)</div>
-    </div>
+   <div class="card" id="metricsFormulas">
+  <h1>Metrics — Formulas</h1>
+  <div class="sub">How each KPI is computed. Counts are per player or team as shown in the dashboards.</div>
+  <ul style="margin:0;padding-left:18px;line-height:1.6">
+    <li><b>Attack Efficiency</b> = <code>(AK − AE) / (AK + AE + AB + A-)</code></li>
+    <li><b>Good Dig %</b> = <code>(D3 + D2) / (D3 + D2 + D1 + D0)</code></li>
+    <li><b>Good Receive %</b> = <code>(R3 + R2) / (R3 + R2 + R1 + R0)</code></li>
+    <li><b>Receive Average (0–3)</b> = <code>(3·R3 + 2·R2 + 1·R1 + 0·R0) / (R3 + R2 + R1 + R0)</code></li>
+    <li><b>Block Rate</b> = <code>BK / (BK + BT + BE)</code></li>
+    <li><b>Side Out %</b> = <code>Side-out successes / Side-out opportunities</code>
+      <div class="sub" style="margin-top:4px">Opportunities are rallies started by opponent serve; a success is a point won by the receiving team (we credit the side-out to the rally’s kill by the receiving team).</div>
+    </li>
+    <li><b>+/−</b> = <code>(AK + SA + BK) − (AE + AB + SE + BE)</code></li>
+  </ul>
+</div>
   </div>
 </div>
 
