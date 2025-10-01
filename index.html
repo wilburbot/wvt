@@ -91,7 +91,6 @@
           <button class="btn accent" id="eventAdd">Add Event</button>
           <button class="btn" id="eventSaveChanges">Save Current Match</button>
           <button class="btn ghost" id="eventDelete">Delete Event</button>
-          <button class="btn" id="eventNew">New Event</button>
         </div>
         <div class="sub">One event per match. Each event keeps its own log and dashboards.</div>
       </div>
@@ -421,22 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('eventSaveChanges').onclick=()=>{ persistCurrentEvent(); alert('Current match saved: '+S.currentEvent); };
 
-  $('eventNew').onclick = () => {
-    // save current
-    persistCurrentEvent();
-    // unique Default / Default 2 / Default 3 ...
-    const base='Default'; let name=base; let i=1;
-    while (S.events[name]) { i+=1; name = `${base} ${i}`; }
-    // create blank event and load it (clear page)
-    S.events[name] = blankEvent();
-    S.currentEvent = name;
-    loadEventState(name);
-    renderEvents(); renderAllFromEvent();
-    alert('Started new event: ' + name);
-  };
-
-  /* ========== Saved rosters ==========
-     (global library independent of events) */
+  /* ========== Saved rosters ========== */
   function renderSavedRosters(){ const tLoad=$('teamRosterLoad'), oLoad=$('oppRosterLoad');
     tLoad.innerHTML=''; oLoad.innerHTML='';
     Object.keys(S.savedRosters.Team).forEach(k=>{ const o=el('option','',k); o.value=k; tLoad.appendChild(o); });
