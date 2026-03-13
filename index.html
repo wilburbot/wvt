@@ -244,29 +244,27 @@
       <h1>Team Dashboard</h1>
       <div class="sub">Team KPIs and per-player stats for the selected event.</div>
       <div id="kpiRowTeam" class="kpi-grid"></div>
-      <table id="dashTeam"><thead><tr>
-        <th>#</th><th>Name</th>
-        <th>Eff</th><th>K</th><th>E</th><th>Att</th>
-        <th>Good Rec%</th><th>RecTotal</th>
-        <th>Good Dig%</th><th>DigTotal</th>
-        <th>SE</th><th>SA</th><th>ServPress</th>
-        <th>BlockRate</th>
-        <th>SO%</th><th>BE</th><th>+/-</th>
-      </tr></thead><tbody></tbody></table>
+<table id="dashTeam"><thead><tr>
+<th>#</th><th>Name</th>
+<th>Eff</th><th>K</th><th>E</th><th>Att</th>
+<th>Good Rec%</th><th>RecTotal</th>
+<th>Rec Avg</th><th>Rec Err%</th>
+<th>SE</th><th>SA</th>
+<th>+/-</th>
+</tr></thead><tbody></tbody></table>
     </div>
     <div class="card">
       <h1>Opponent Dashboard</h1>
       <div class="sub">Opponent KPIs and per-player stats for the selected event.</div>
       <div id="kpiRowOpp" class="kpi-grid"></div>
-      <table id="dashOpp"><thead><tr>
-        <th>#</th><th>Name</th>
-        <th>Eff</th><th>K</th><th>E</th><th>Att</th>
-        <th>Good Rec%</th><th>RecTotal</th>
-        <th>Good Dig%</th><th>DigTotal</th>
-        <th>SE</th><th>SA</th><th>ServPress</th>
-        <th>BlockRate</th>
-        <th>SO%</th><th>BE</th><th>+/-</th>
-      </tr></thead><tbody></tbody></table>
+<table id="dashOpp"><thead><tr>
+<th>#</th><th>Name</th>
+<th>Eff</th><th>K</th><th>E</th><th>Att</th>
+<th>Good Rec%</th><th>RecTotal</th>
+<th>Rec Avg</th><th>Rec Err%</th>
+<th>SE</th><th>SA</th>
+<th>+/-</th>
+</tr></thead><tbody></tbody></table>
     </div>
 
     <!-- Metrics — Formulas -->
@@ -632,36 +630,59 @@ document.addEventListener('DOMContentLoaded', () => {
     const players=Object.values(agg);
     const bySide={Team:[],Opp:[]}; players.forEach(d=>{ if(d.side==='Team') bySide.Team.push(d); else if(d.side==='Opp') bySide.Opp.push(d); });
 
-    function fillTable(side){
-      const tb=(side==='Team'?$('dashTeam'):$('dashOpp')).querySelector('tbody');
-      tb.innerHTML='';
-      bySide[side].sort((a,b)=>a.num.localeCompare(b.num));
-      bySide[side].forEach(d=>{
-        const att=(d.AK||0)+(d.AE||0)+(d['A-']||0)+(d.AB||0);
-        const eff=att?(((d.AK||0)-(d.AE||0))/att):0; /* (AK-AE)/(AK+AE+AB+A-) */
-        const rTot=(d.R3||0)+(d.R2||0)+(d.R1||0)+(d.R0||0);
-        const rRate=rTot?(((d.R3||0)+(d.R2||0))/rTot):0; /* Good Receive % */
-        const dTot=(d.D3||0)+(d.D2||0)+(d.D1||0)+(d.D0||0);
-        const dRate=dTot?(((d.D3||0)+(d.D2||0))/dTot):0; /* Good Dig % */
-        const sTot=(d.SA||0)+(d['S+']||0)+(d['S-']||0)+(d.SE||0);
-        const sPress=sTot?(((d.SA||0)+(d['S+']||0))/sTot):0;
-        const bTot=(d.BK||0)+(d.BE||0)+(d.BT||0);
-        const bRate=bTot?((d.BK||0)/bTot):0;
-        const soAtt=d.SOatt||0, soSucc=d.SOsucc||0, soRate=soAtt?soSucc/soAtt:0;
-        const be=d.BE||0;
-        const plusMinus=(d.AK||0)+(d.SA||0)+(d.BK||0) - ((d.AE||0)+(d.AB||0)+(d.SE||0)+(d.BE||0));
-        const tr=el('tr');
-        tr.innerHTML=`<td>${d.num}</td><td>${d.name||''}</td>
-          <td>${(eff*100).toFixed(0)}%</td><td>${d.AK||0}</td><td>${d.AE||0}</td><td>${att}</td>
-          <td>${(rRate*100).toFixed(0)}%</td><td>${rTot}</td>
-          <td>${(dRate*100).toFixed(0)}%</td><td>${dTot}</td>
-          <td>${d.SE||0}</td><td>${d.SA||0}</td><td>${(sPress*100).toFixed(0)}%</td>
-          <td>${(bRate*100).toFixed(0)}%</td>
-          <td>${(soRate*100).toFixed(0)}%</td><td>${be}</td><td style="color:${plusMinus<0?'red':'green'}">${plusMinus}</td>`;
-        tb.appendChild(tr);
-      });
-    }
+function fillTable(side){
+  const tb=(side==='Team'?$('dashTeam'):$('dashOpp')).querySelector('tbody');
+  tb.innerHTML='';
+  bySide[side].sort((a,b)=>a.num.localeCompare(b.num));
 
+  bySide[side].forEach(d=>{
+
+    const att=(d.AK||0)+(d.AE||0)+(d['A-']||0)+(d.AB||0);
+    const eff=att?(((d.AK||0)-(d.AE||0))/att):0;
+
+    const r3=(d.R3||0);
+    const r2=(d.R2||0);
+    const r1=(d.R1||0);
+    const r0=(d.R0||0);
+
+    const rTot=r3+r2+r1+r0;
+
+    const rRate=rTot?((r3+r2)/rTot):0;
+
+    const rAvg=rTot?((3*r3 + 2*r2 + r1)/rTot):0;
+
+    const rErr=rTot?(r0/rTot):0;
+
+    const plusMinus=(d.AK||0)+(d.SA||0)+(d.BK||0)
+      -((d.AE||0)+(d.AB||0)+(d.SE||0)+(d.BE||0));
+
+    const tr=el('tr');
+
+    tr.innerHTML=`
+    <td>${d.num}</td>
+    <td>${d.name||''}</td>
+
+    <td>${(eff*100).toFixed(0)}%</td>
+    <td>${d.AK||0}</td>
+    <td>${d.AE||0}</td>
+    <td>${att}</td>
+
+    <td>${(rRate*100).toFixed(0)}%</td>
+    <td>${rTot}</td>
+
+    <td>${rAvg.toFixed(2)}</td>
+    <td>${(rErr*100).toFixed(0)}%</td>
+
+    <td>${d.SE||0}</td>
+    <td>${d.SA||0}</td>
+
+    <td style="color:${plusMinus<0?'red':'green'}">${plusMinus}</td>
+    `;
+
+    tb.appendChild(tr);
+
+  });
+}
     function renderKPI(side){
       const holder=$(side==='Team'?'kpiRowTeam':'kpiRowOpp');
       holder.innerHTML='';
