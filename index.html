@@ -373,7 +373,9 @@
         <li><b>Good Receive %</b> = <code>(R3 + R2) / (R3 + R2 + R1 + R0)</code></li>
         <li><b>Receive Average (0–3)</b> = <code>(3·R3 + 2·R2 + 1·R1 + 0·R0) / (R3 + R2 + R1 + R0)</code></li>
         <li><b>Block Rate</b> = <code>BK / (BK + BT + BE)</code></li>
-        <li><b>Side Out %</b> = <code>Side-out successes / Side-out opportunities</code></li>
+        <li><b>Side Out %</b> = <code>Side-out successes / Side-out opportunities</code>
+          <div class="sub" style="margin-top:4px">An opportunity is any rally following the opponent's serve; a success is your side winning that rally, determined by the last point-ending action logged (ace, kill, block, or an error) — extended rallies with no such action logged aren't counted either way.</div>
+        </li>
         <li><b>+/−</b> = <code>(AK + SA + BK) − (AE + AB + SE + BE)</code></li>
       </ul>
     </div>
@@ -457,6 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const num2=v=>String(v||'').replace(/\D/g,'').slice(-2).padStart(2,'0');
   const trunc=(s,n=18)=> (s||'').length>n ? s.slice(0,n-1)+'…' : (s||'');
   const now=()=>new Date().toLocaleTimeString();
+  const esc=s=>String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
   const QUALS={ R:["3","2","1","0"], S:["A","+","-","E"], A:["K","B","-","E"], B:["K","T","M","E"], D:["3","2","1","0"], T:["3","2","1","0"], F:["Y","E"] };
   const MEAN={ R3:"Receive: excellent", R2:"Receive: good", R1:"Receive: poor", R0:"Receive: loss",
@@ -468,7 +471,11 @@ document.addEventListener('DOMContentLoaded', () => {
                FY:"Free ball: clean", FE:"Free ball: error" };
 
   const LS='wpvb_events_roster_rot_v4';
-  const load=()=>{ try{return JSON.parse(localStorage.getItem(LS)||'{}')}catch(e){return{}} };
+  // Prior schema keys this app has used, most recent first. Their shape kept
+  // a single global roster/zones/libero/rotationIndex shared by every event
+  // (v4 moved those per-event instead), so migrating means copying that
+  // shared state into each event rather than a straight field-for-field copy.
+  const LEGACY_LS=['wpvb_events_roster_rot_v3','wpvb_events_roster_rot_pwa'];
   const save=s=>localStorage.setItem(LS,JSON.stringify(s));
   const defaultEvent='Default';
 
@@ -483,6 +490,43 @@ document.addEventListener('DOMContentLoaded', () => {
       rotationIndex: { Team: 1, Opp: 1 },
     };
   }
+
+  function migrateLegacyData(){
+    for(const key of LEGACY_LS){
+      let raw;
+      try{ raw=JSON.parse(localStorage.getItem(key)||'null'); }catch(e){ raw=null; }
+      if(!raw || !raw.events || !Object.keys(raw.events).length) continue;
+      const migrated={
+        events:{},
+        currentEvent: raw.currentEvent || defaultEvent,
+        savedRosters: raw.savedRosters || { Team:{}, Opp:{} }
+      };
+      Object.keys(raw.events).forEach(name=>{
+        const legacyEv = raw.events[name] || {};
+        const ev = blankEvent();
+        ev.log = legacyEv.log || [];
+        ev.dash = legacyEv.dash || {};
+        ev.rot = legacyEv.rot || { serve:{}, so:{} };
+        if(raw.roster) ev.roster = JSON.parse(JSON.stringify(raw.roster));
+        if(raw.zones) ev.zones = JSON.parse(JSON.stringify(raw.zones));
+        if(raw.libero) ev.libero = JSON.parse(JSON.stringify(raw.libero));
+        if(raw.rotationIndex) ev.rotationIndex = JSON.parse(JSON.stringify(raw.rotationIndex));
+        migrated.events[name] = ev;
+      });
+      save(migrated);
+      console.info('WolfPack: migrated saved data from', key, 'to', LS);
+      return migrated;
+    }
+    return null;
+  }
+
+  const load=()=>{
+    try{
+      const raw=localStorage.getItem(LS);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return migrateLegacyData() || {};
+  };
 
   const S = Object.assign({
     events: {},
@@ -798,6 +842,13 @@ document.addEventListener('DOMContentLoaded', () => {
     obj[key]=(obj[key]||0)+1;
   }
 
+  // Which side a terminal action+qualifier awards the rally to, relative to
+  // the acting player's own side ('self') or their opponent ('opp'). Only
+  // codes that actually end a rally belong here — in-play qualifiers like
+  // S+/S-, A-, BT, R1-3, D1-3 etc. are deliberately left out so the rally
+  // keeps accumulating entries until a real point-ending action is logged.
+  const RALLY_TERMINAL={ SA:'self', SE:'opp', AK:'self', AB:'opp', AE:'opp', BK:'self', BE:'opp', D0:'opp' };
+
   function computeRallies(log){
     const rallies=[]; let cur=null;
     const startRally=(serveSide)=>{cur={serveSide, entries:[]}; rallies.push(cur);};
@@ -806,17 +857,20 @@ document.addEventListener('DOMContentLoaded', () => {
       if(!rallies.length) startRally(e.side||'Team');
       rallies[rallies.length-1].entries.push(e);
     });
-    const out={Team:{att:0,succ:0}, Opp:{att:0,succ:0}, byPlayer:{}};
+    const out={Team:{att:0,succ:0}, Opp:{att:0,succ:0}};
     rallies.forEach(r=>{
       const recv = (r.serveSide==='Team'?'Opp':'Team');
       out[recv].att++;
-      const killer = r.entries.find(x=>x.side===recv && x.action==='A' && x.qual==='K');
-      if(killer){
-        out[recv].succ++;
-        const k=killer.side+":"+killer.num;
-        if(!out.byPlayer[k]) out.byPlayer[k]={att:0,succ:0};
-        out.byPlayer[k].att++; out.byPlayer[k].succ++;
-      }
+      // Take the last terminal action logged in the rally as its outcome —
+      // later entries (e.g. a transition kill after a dig) supersede earlier
+      // in-play ones that already have no RALLY_TERMINAL entry.
+      let winner=null;
+      r.entries.forEach(e=>{
+        const outcome=RALLY_TERMINAL[e.action+e.qual];
+        if(!outcome) return;
+        winner = outcome==='self' ? e.side : (e.side==='Team'?'Opp':'Team');
+      });
+      if(winner===recv) out[recv].succ++;
     });
     return out;
   }
@@ -831,11 +885,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const so=computeRallies(EVT().log);
-    Object.entries(so.byPlayer).forEach(([k,v])=>{
-      agg[k]=agg[k]||{side:k.split(':')[0],num:k.split(':')[1],name:''};
-      agg[k].SOatt=(agg[k].SOatt||0)+v.att;
-      agg[k].SOsucc=(agg[k].SOsucc||0)+v.succ;
-    });
 
     const players=Object.values(agg);
     const bySide={Team:[],Opp:[]};
@@ -865,7 +914,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const tr=el('tr');
         tr.innerHTML=`
           <td>${d.num}</td>
-          <td>${d.name||''}</td>
+          <td>${esc(d.name)}</td>
           <td>${(eff*100).toFixed(0)}%</td>
           <td>${d.AK||0}</td>
           <td>${d.AE||0}</td>
@@ -907,7 +956,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const bTot=sum(d=>(d.BK||0)+(d.BE||0)+(d.BT||0));
       const bRate=bTot? (sum(d=>d.BK||0)/bTot):0;
 
-      const soAtt=sum(d=>d.SOatt||0), soSucc=sum(d=>d.SOsucc||0);
+      const soAtt=so[side].att, soSucc=so[side].succ;
       const soRate=soAtt?soSucc/soAtt:0;
 
       const bubbles=[
@@ -941,7 +990,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function appendRow(idx,r){
     const tr=el('tr');
-    tr.innerHTML=`<td>${idx}</td><td>${r.time}</td><td>${r.side}</td><td><b>${r.code}</b></td><td>${r.num}</td><td>${r.name||''}</td><td>${r.action}</td><td>${r.qual}</td><td>${MEAN[r.action+r.qual]||''}</td><td class="table-actions"><button class="btn small delRow" data-i="${idx-1}">Delete</button></td>`;
+    tr.innerHTML=`<td>${idx}</td><td>${r.time}</td><td>${r.side}</td><td><b>${r.code}</b></td><td>${r.num}</td><td>${esc(r.name)}</td><td>${r.action}</td><td>${r.qual}</td><td>${MEAN[r.action+r.qual]||''}</td><td class="table-actions"><button class="btn small delRow" data-i="${idx-1}">Delete</button></td>`;
     $('log').querySelector('tbody').appendChild(tr);
   }
 
