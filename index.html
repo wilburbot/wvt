@@ -1073,15 +1073,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const history = [];
     const redoStack = [];
+    let sized = false;
 
     function resizeCanvas(){
       const rect = stage.getBoundingClientRect();
+      // The board's page starts hidden (display:none) behind the Logger tab,
+      // so the stage has no box yet and this would zero out the canvas via
+      // an inline 0px style that CSS can never override again. Skip until
+      // the stage actually has a real size (tab switch triggers the
+      // ResizeObserver below, which re-fires once it does).
+      if(!rect.width || !rect.height) return;
       const dpr = window.devicePixelRatio || 1;
 
       const old = document.createElement('canvas');
       old.width = canvas.width;
       old.height = canvas.height;
-      if(old.width && old.height){
+      if(sized && old.width && old.height){
         old.getContext('2d').drawImage(canvas, 0, 0);
       }
 
@@ -1095,8 +1102,15 @@ document.addEventListener('DOMContentLoaded', () => {
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
-      if(old.width && old.height){
+      if(sized && old.width && old.height){
         ctx.drawImage(old, 0, 0, rect.width, rect.height);
+      } else {
+        ctx.clearRect(0, 0, rect.width, rect.height);
+      }
+
+      if(!sized){
+        sized = true;
+        saveState();
       }
     }
 
@@ -1313,11 +1327,16 @@ document.addEventListener('DOMContentLoaded', () => {
       saveState();
     });
 
-    window.addEventListener('resize', resizeCanvas);
+    if('ResizeObserver' in window){
+      // Fires whenever the stage's laid-out size changes, including the
+      // display:none -> visible transition when the Drawing Board tab is
+      // opened, not just window resizes.
+      new ResizeObserver(()=>resizeCanvas()).observe(stage);
+    } else {
+      window.addEventListener('resize', resizeCanvas);
+    }
 
     resizeCanvas();
-    clearCanvas();
-    saveState();
   }
 
   ['Team','Opp'].forEach(side=>{ bindCourt(side); renderRoster(side); });
