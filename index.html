@@ -54,6 +54,10 @@
   .display{display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin:8px 0}
   .code{font-size:22px;font-weight:900;color:#ff7f11}
   .pill{background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:12px;color:#000}
+  .pill.live{background:#e8fff0;border-color:#34c759;color:#0a7a2f;position:relative;padding-left:18px}
+  .pill.live::before{content:'';position:absolute;left:8px;top:50%;width:7px;height:7px;border-radius:999px;background:#22c55e;transform:translateY(-50%);box-shadow:0 0 0 0 rgba(34,197,94,.55)}
+  .pill.live::before{animation:livepulse 1.6s infinite}
+  @keyframes livepulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 8px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
   table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden}
   thead tr{background:#ffe8d1}
   th,td{border-bottom:1px solid var(--line);padding:8px;text-align:left;font-size:13px}
@@ -189,6 +193,15 @@
           <button class="btn ghost" id="eventDelete">Delete Event</button>
         </div>
         <div class="sub">One event per match. Each event keeps its own log and dashboards.</div>
+
+        <div class="row" style="margin-top:10px">
+          <span class="pill" id="syncStatus">Offline</span>
+          <input id="roomCodeInput" class="input" style="width:120px;text-transform:uppercase" placeholder="Room code" maxlength="6">
+          <button class="btn accent" id="roomCreate">Start Live Sync</button>
+          <button class="btn" id="roomJoin">Join Room</button>
+          <button class="btn ghost" id="roomLeave" hidden>Stop Sync</button>
+        </div>
+        <div class="sub">Live Sync shares the current event's roster, court, log, and dashboard in real time with anyone who has the room code — no login needed, same trust model as sharing a doc link.</div>
       </div>
 
       <div class="two-col">
@@ -337,8 +350,11 @@
 <div id="pageDash" class="page">
   <div class="container">
     <div class="card">
-      <h1>Team Dashboard</h1>
-      <div class="sub">Team KPIs and per-player stats for the selected event.</div>
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h1>Team Dashboard</h1>
+        <span class="pill" id="syncStatusDash">Offline</span>
+      </div>
+      <div class="sub">Team KPIs and per-player stats for the selected event. Updates live while Live Sync is on.</div>
       <div id="kpiRowTeam" class="kpi-grid"></div>
       <table id="dashTeam"><thead><tr>
         <th>#</th><th>Name</th>
@@ -474,7 +490,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // (v4 moved those per-event instead), so migrating means copying that
   // shared state into each event rather than a straight field-for-field copy.
   const LEGACY_LS=['wpvb_events_roster_rot_v3','wpvb_events_roster_rot_pwa'];
-  const save=s=>localStorage.setItem(LS,JSON.stringify(s));
+  // Live Sync connection state. Declared here (rather than down by the rest
+  // of the Live Sync code below) because save() can run synchronously very
+  // early — e.g. during migrateLegacyData() — and a `let` referenced before
+  // its own declaration line has run throws, even under `typeof`.
+  let syncRef = null, applyingRemote = false;
+  const save=s=>{
+    localStorage.setItem(LS,JSON.stringify(s));
+    // Push to the active Live Sync room, unless this save is itself just
+    // mirroring data that came FROM the room (applyingRemote) — otherwise
+    // every incoming update would immediately echo back out.
+    if(syncRef && !applyingRemote) syncRef.set(syncSnapshot());
+  };
   const defaultEvent='Default';
 
   function blankEvent(){
@@ -595,6 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('eventAdd').onclick=()=>{
     const name=$('eventName').value.trim(); if(!name) return;
+    if(syncRef) detachRoom(); // a room is tied to one event/match
     if(!S.events[name]) S.events[name] = blankEvent();
     persistCurrentEvent();
     S.currentEvent=name;
@@ -607,6 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('eventDelete').onclick=()=>{
     if(S.currentEvent===defaultEvent) return alert('Cannot delete Default event');
     if(!confirm('Delete event "'+S.currentEvent+'"?')) return;
+    if(syncRef) detachRoom();
     delete S.events[S.currentEvent];
     S.currentEvent=defaultEvent;
     loadEventState(S.currentEvent);
@@ -616,6 +645,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   $('eventSelect').onchange=e=>{
+    if(syncRef) detachRoom(); // a room is tied to one event/match
     persistCurrentEvent();
     S.currentEvent=e.target.value;
     loadEventState(S.currentEvent);
@@ -623,6 +653,154 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   $('eventSaveChanges').onclick=()=>{ persistCurrentEvent(); alert('Current match saved: '+S.currentEvent); };
+
+  /* ================= Live Sync (optional, cross-device) =================
+     Uses Firebase Realtime Database as a lightweight real-time backend so
+     one event's roster, court, log, and dashboard can be shared live
+     between devices — e.g. an assistant logging plays on a phone while the
+     head coach's tablet Dashboard tab updates as it happens. There's no
+     login: whoever has the room code can read and write that room, the
+     same trust model as sharing a doc link.
+
+     One-time setup (~2 minutes, free), only needed if you want this:
+       1. https://console.firebase.google.com -> Add project.
+       2. Build > Realtime Database -> Create database ("start in test
+          mode" is fine to begin with, tighten later if you want).
+       3. In the Realtime Database "Rules" tab, paste:
+            { "rules": { "rooms": { "$room": { ".read": true, ".write": true } } } }
+          This intentionally lets anyone who already knows a room's code
+          read/write only that room — the code itself is the access
+          control. Nobody can list or guess other rooms without it.
+       4. Project settings (gear icon) > General > Your apps > Web app
+          (</>) -> copy the config object into FIREBASE_CONFIG below.
+     Leave FIREBASE_CONFIG as-is to skip all of this — the app keeps
+     working fully offline/local exactly as before, no network dependency.
+     ========================================================================= */
+  const FIREBASE_CONFIG = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+    projectId: "YOUR_PROJECT",
+  };
+  const FIREBASE_CONFIGURED = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
+
+  let syncListener = null;
+
+  function loadScriptOnce(src){
+    return new Promise((resolve, reject)=>{
+      if(document.querySelector(`script[src="${src}"]`)) return resolve();
+      const s = document.createElement('script');
+      s.src = src; s.onload = ()=>resolve(); s.onerror = ()=>reject(new Error('Failed to load '+src));
+      document.head.appendChild(s);
+    });
+  }
+
+  let fbReadyPromise = null;
+  function ensureFirebase(){
+    if(!FIREBASE_CONFIGURED) return Promise.reject(new Error('Live Sync is not set up yet — add your Firebase config to FIREBASE_CONFIG in the page source (see the comment above it).'));
+    if(fbReadyPromise) return fbReadyPromise;
+    fbReadyPromise = (async ()=>{
+      if(typeof firebase==='undefined'){
+        await loadScriptOnce('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
+        await loadScriptOnce('https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js');
+      }
+      if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+      return firebase.database();
+    })();
+    return fbReadyPromise;
+  }
+
+  function genRoomCode(){
+    const chars='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I — easy to read aloud
+    let s=''; for(let i=0;i<6;i++) s+=chars[Math.floor(Math.random()*chars.length)];
+    return s;
+  }
+
+  function syncSnapshot(){
+    return {
+      log: EVT().log, dash: EVT().dash, rot: EVT().rot,
+      roster: S.roster, zones: S.zones, libero: S.libero, rotationIndex: S.rotationIndex,
+      updatedAt: (typeof firebase!=='undefined') ? firebase.database.ServerValue.TIMESTAMP : Date.now()
+    };
+  }
+
+  function updateSyncUI(text, live){
+    ['syncStatus','syncStatusDash'].forEach(id=>{
+      const pill=$(id); if(!pill) return;
+      pill.textContent=text;
+      pill.classList.toggle('live', !!live);
+    });
+    const active = !!syncRef;
+    $('roomCreate').hidden = active;
+    $('roomJoin').hidden = active;
+    $('roomCodeInput').disabled = active;
+    $('roomLeave').hidden = !active;
+  }
+
+  function applyRemoteSnapshot(data){
+    if(!data) return;
+    applyingRemote = true;
+    try{
+      EVT().log = data.log || [];
+      EVT().dash = data.dash || {};
+      EVT().rot = data.rot || { serve:{}, so:{} };
+      S.roster = data.roster || { Team:[], Opp:[] };
+      S.zones = data.zones || { Team:{1:null,6:null,5:null,2:null,3:null,4:null}, Opp:{1:null,6:null,5:null,2:null,3:null,4:null} };
+      S.libero = data.libero || { Team:{ num:'', partners:[], enabled:false }, Opp:{ num:'', partners:[], enabled:false } };
+      S.rotationIndex = data.rotationIndex || { Team:1, Opp:1 };
+      localStorage.setItem(LS, JSON.stringify(S)); // mirror without re-broadcasting (applyingRemote guards save())
+      renderAllFromEvent();
+    } finally {
+      applyingRemote = false;
+    }
+  }
+
+  function attachRoom(db, code, isNew){
+    if(syncRef) detachRoom();
+    syncRef = db.ref('rooms/'+code);
+    S.sync = { roomCode: code };
+    localStorage.setItem(LS, JSON.stringify(S));
+    updateSyncUI('Connecting…', false);
+
+    syncListener = snap=>{
+      updateSyncUI('● Live · '+code, true);
+      applyRemoteSnapshot(snap.val());
+    };
+    syncRef.on('value', syncListener, err=>{
+      console.error('Live Sync error:', err);
+      updateSyncUI('Sync error', false);
+    });
+
+    if(isNew) syncRef.set(syncSnapshot());
+  }
+
+  function detachRoom(){
+    if(syncRef && syncListener) syncRef.off('value', syncListener);
+    syncRef = null; syncListener = null;
+    S.sync = null;
+    localStorage.setItem(LS, JSON.stringify(S));
+    updateSyncUI('Offline', false);
+  }
+
+  $('roomCreate').onclick=async ()=>{
+    try{
+      const db = await ensureFirebase();
+      const code = genRoomCode();
+      $('roomCodeInput').value = code;
+      attachRoom(db, code, true);
+    }catch(err){ alert(err.message); }
+  };
+
+  $('roomJoin').onclick=async ()=>{
+    const code = $('roomCodeInput').value.trim().toUpperCase();
+    if(!code) return alert('Enter a room code to join.');
+    try{
+      const db = await ensureFirebase();
+      attachRoom(db, code, false);
+    }catch(err){ alert(err.message); }
+  };
+
+  $('roomLeave').onclick=()=> detachRoom();
 
   function renderSavedRosters(){
     const tLoad=$('teamRosterLoad'), oLoad=$('oppRosterLoad');
@@ -1356,6 +1534,14 @@ document.addEventListener('DOMContentLoaded', () => {
   renderAllFromEvent();
   setupCoachBoard();
   applyHash();
+
+  updateSyncUI('Offline', false);
+  if(S.sync && S.sync.roomCode){
+    ensureFirebase().then(db=>attachRoom(db, S.sync.roomCode, false)).catch(()=>{
+      // Firebase isn't configured (or unreachable) — stay local/offline silently.
+      S.sync = null;
+    });
+  }
 
   try{
     console.assert(typeof EVT==='function','EVT function missing');
