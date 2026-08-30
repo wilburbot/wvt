@@ -80,68 +80,26 @@
   .page.board-page{ display:none; }
   .page.board-page.active{
     display:flex;
-    align-items:stretch;
+    flex-direction:column;
     height:100%;
-    position:relative;
   }
-  .board-sidebar{
-    flex:0 0 260px;
-    width:260px;
+  /* A static toolbar row above the board — always visible, nothing to
+     open or close. It wraps onto more lines on narrow screens instead of
+     eating into the board's width the way a left sidebar would (a 16:9
+     board is a wide shape; a narrow leftover strip beside a sidebar
+     squeezes it down to almost nothing). */
+  .board-toolbar{
+    flex:0 0 auto;
+    display:flex;
+    flex-wrap:wrap;
+    align-items:flex-start;
+    gap:16px 22px;
     background:#fff;
-    border-right:1px solid var(--line);
-    padding:14px;
-    overflow-y:auto;
-  }
-  .board-tools-toggle{
-    display:none;
-    position:absolute;
-    top:10px;
-    left:10px;
-    z-index:60;
-    border:none;
-    border-radius:10px;
-    padding:9px 14px;
-    font-weight:800;
-    font-size:14px;
-    background:#000;
-    color:#fff;
-    box-shadow:0 2px 10px rgba(0,0,0,.3);
-    cursor:pointer;
-  }
-  .board-backdrop{
-    display:none;
-    position:absolute;
-    inset:0;
-    background:rgba(0,0,0,.35);
-    z-index:45;
-  }
-  /* Below this width a fixed sidebar leaves too little room for a 16:9
-     board (it's a wide shape, so a narrow leftover strip forces it tiny).
-     Turn the tool panel into a slide-over drawer instead, so the board can
-     use the full width and tools are a tap away rather than a fixed tax
-     on every pixel. */
-  @media (max-width:960px){
-    .board-tools-toggle{ display:inline-flex; align-items:center; gap:6px; }
-    .board-sidebar{
-      position:absolute;
-      top:0; left:0; bottom:0;
-      width:260px;
-      max-width:80vw;
-      z-index:50;
-      transform:translateX(-100%);
-      transition:transform .2s ease;
-      box-shadow:2px 0 20px rgba(0,0,0,.25);
-    }
-    .page.board-page.sidebar-open .board-sidebar{ transform:translateX(0); }
-    .page.board-page.sidebar-open .board-backdrop{ display:block; }
-  }
-  .board-title{
-    margin:0 0 14px;
-    font-size:17px;
-    color:#000;
+    border-bottom:1px solid var(--line);
+    padding:10px 14px;
   }
   .tool-group{
-    margin-bottom:14px;
+    margin-bottom:0;
   }
   .tool-label{
     display:block;
@@ -177,6 +135,7 @@
   .board-main{
     flex:1 1 auto;
     min-width:0;
+    min-height:0;
     display:flex;
     align-items:center;
     justify-content:center;
@@ -453,11 +412,7 @@
 
 <!-- DRAWING BOARD PAGE -->
 <div id="pageBoard" class="page board-page">
-  <button id="boardToolsToggle" class="board-tools-toggle" type="button">☰ Tools</button>
-  <div id="boardBackdrop" class="board-backdrop"></div>
-  <aside class="board-sidebar">
-    <h1 class="board-title">Coach Drawing Board</h1>
-
+  <div class="board-toolbar">
     <div class="tool-group">
       <span class="tool-label">Pen Type</span>
       <div class="tool-row">
@@ -501,7 +456,7 @@
         <button class="btn ghost" id="coachClear">Clear Board</button>
       </div>
     </div>
-  </aside>
+  </div>
 
   <div class="board-main">
     <div class="board-stage" id="coachBoardStage">
@@ -1297,13 +1252,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = $('coachCanvas');
     if(!stage || !canvas) return;
 
-    const boardPage = $('pageBoard');
-    const closeToolsDrawer = ()=> boardPage.classList.remove('sidebar-open');
-    $('boardToolsToggle').addEventListener('click', ()=>{
-      boardPage.classList.toggle('sidebar-open');
-    });
-    $('boardBackdrop').addEventListener('click', closeToolsDrawer);
-
     const ctx = canvas.getContext('2d');
     let drawing = false;
     let startX = 0, startY = 0;
@@ -1466,7 +1414,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     canvas.addEventListener('pointerdown', e => {
-      closeToolsDrawer(); // on mobile, starting to draw is the natural "I'm done picking tools" moment
       canvas.setPointerCapture(e.pointerId);
       const p = getPos(e);
       drawing = true;
