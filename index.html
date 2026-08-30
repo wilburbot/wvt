@@ -677,10 +677,10 @@ document.addEventListener('DOMContentLoaded', () => {
      working fully offline/local exactly as before, no network dependency.
      ========================================================================= */
   const FIREBASE_CONFIG = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-    projectId: "YOUR_PROJECT",
+    apiKey: "AIzaSyAmCnAyWNgISvYkxweHqmm_Lol1pkbaths",
+    authDomain: "wvt-logger.firebaseapp.com",
+    databaseURL: "https://wvt-logger-default-rtdb.firebaseio.com",
+    projectId: "wvt-logger",
   };
   const FIREBASE_CONFIGURED = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
 
@@ -701,8 +701,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if(fbReadyPromise) return fbReadyPromise;
     fbReadyPromise = (async ()=>{
       if(typeof firebase==='undefined'){
-        await loadScriptOnce('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
-        await loadScriptOnce('https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js');
+        await loadScriptOnce('https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js');
+        await loadScriptOnce('https://www.gstatic.com/firebasejs/12.18.0/firebase-database-compat.js');
       }
       if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
       return firebase.database();
