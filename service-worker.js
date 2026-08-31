@@ -5,6 +5,9 @@ const ASSETS = [
   './logo-32.png',
   './logo-192.png',
   './logo-512.png',
+  './apple-touch-icon.png',
+  './icon-192.png',
+  './icon-512.png',
   './site.webmanifest'
 ];
 
