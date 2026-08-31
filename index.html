@@ -342,7 +342,6 @@
           <button class="btn" data-action="S">S (Serve)</button>
           <button class="btn" data-action="T">T (Set)</button>
           <button class="btn" data-action="D">D (Dig)</button>
-          <button class="btn" data-action="F">F (Free)</button>
           <button class="btn" data-action="B">B (Block)</button>
           <button class="btn" data-action="A">A (Attack)</button>
         </div>
@@ -486,14 +485,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const now=()=>new Date().toLocaleTimeString();
   const esc=s=>String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-  const QUALS={ R:["3","2","1","0"], S:["A","+","-","E"], A:["K","B","-","E"], B:["K","T","M","E"], D:["3","2","1","0"], T:["3","2","1","0"], F:["Y","E"] };
+  const QUALS={ R:["3","2","1","0"], S:["A","+","-","E"], A:["K","B","-","E"], B:["K","T","M","E"], D:["3","2","1","0"], T:["3","2","1","0"] };
   const MEAN={ R3:"Receive: excellent", R2:"Receive: good", R1:"Receive: poor", R0:"Receive: loss",
                SA:"Serve: ace", "S+":"Serve: tough", "S-":"Serve: neutral", SE:"Serve: error",
                AK:"Attack: kill", AB:"Attack: blocked", "A-":"Attack: defended", AE:"Attack: error",
                BK:"Block: kill", BT:"Block: touch", BM:"Block: miss", BE:"Block: error",
                D3:"Dig: perfect", D2:"Dig: controlled", D1:"Dig: scramble", D0:"Dig: missed",
-               T3:"Set: perfect", T2:"Set: good", T1:"Set: off-target", T0:"Set: fault",
-               FY:"Free ball: clean", FE:"Free ball: error" };
+               T3:"Set: perfect", T2:"Set: good", T1:"Set: off-target", T0:"Set: fault" };
 
   const LS='wpvb_events_roster_rot_v4';
   // Prior schema keys this app has used, most recent first. Their shape kept
