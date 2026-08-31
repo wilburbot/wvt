@@ -215,12 +215,13 @@
 
         <div class="row" style="margin-top:10px">
           <span class="pill" id="syncStatus">Offline</span>
+          <input id="myNameInput" class="input" style="min-width:160px" placeholder="Your name (shown in the log)" maxlength="40">
           <input id="roomCodeInput" class="input" style="width:120px;text-transform:uppercase" placeholder="Room code" maxlength="6">
           <button class="btn accent" id="roomCreate">Start Live Sync</button>
           <button class="btn" id="roomJoin">Join Room</button>
           <button class="btn ghost" id="roomLeave" hidden>Stop Sync</button>
         </div>
-        <div class="sub">Live Sync shares the current event's roster, court, log, and dashboard in real time with anyone who has the room code — no login needed, same trust model as sharing a doc link.</div>
+        <div class="sub">Live Sync shares the current event's roster, court, log, and dashboard in real time with anyone who has the room code — no login needed, same trust model as sharing a doc link. Enter your name so the Event Log shows who logged each play.</div>
       </div>
 
       <div class="two-col">
@@ -355,7 +356,7 @@
 
       <div class="card">
         <h1>Event Log</h1>
-        <table id="log"><thead><tr><th>#</th><th>Time</th><th>Side</th><th>Code</th><th>P#</th><th>Name</th><th>Action</th><th>Qualifier</th><th>Meaning</th><th>Tools</th></tr></thead><tbody></tbody></table>
+        <table id="log"><thead><tr><th>#</th><th>Time</th><th>Side</th><th>Code</th><th>P#</th><th>Name</th><th>Action</th><th>Qualifier</th><th>Meaning</th><th>By</th><th>Tools</th></tr></thead><tbody></tbody></table>
         <div class="row" style="margin-top:10px">
           <button id="exportCSV" class="btn">Export CSV</button>
           <button id="clearLog" class="btn ghost">Clear All Logs</button>
@@ -567,7 +568,8 @@ document.addEventListener('DOMContentLoaded', () => {
     events: {},
     currentEvent: defaultEvent,
     sel:{ side:null, zone:null },
-    cur:{ side:'--', player:'', action:'', qual:'' }
+    cur:{ side:'--', player:'', action:'', qual:'' },
+    myName: '' // local device identity for the log's "By" column — never synced to the room
   }, load());
 
   if(!S.events[defaultEvent]) S.events[defaultEvent] = blankEvent();
@@ -793,7 +795,32 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSyncUI('Offline', false);
   }
 
+  $('myNameInput').value = S.myName || '';
+  // Update S.myName live on every keystroke (not just on blur/change) so a
+  // play logged right after typing a name — before the field ever loses
+  // focus — still gets attributed correctly. Persisting to localStorage
+  // only happens on change, so typing doesn't spam writes.
+  $('myNameInput').addEventListener('input', ()=>{
+    S.myName = $('myNameInput').value.trim();
+  });
+  $('myNameInput').addEventListener('change', ()=>{
+    save(S); // local-only field — syncSnapshot() never includes myName, so this doesn't broadcast
+  });
+
+  function ensureMyName(){
+    const name = $('myNameInput').value.trim();
+    if(!name){
+      alert("Enter your name first — it's shown in the Event Log so everyone can see who logged each play.");
+      $('myNameInput').focus();
+      return false;
+    }
+    S.myName = name;
+    save(S);
+    return true;
+  }
+
   $('roomCreate').onclick=async ()=>{
+    if(!ensureMyName()) return;
     try{
       const db = await ensureFirebase();
       const code = genRoomCode();
@@ -803,6 +830,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   $('roomJoin').onclick=async ()=>{
+    if(!ensureMyName()) return;
     const code = $('roomCodeInput').value.trim().toUpperCase();
     if(!code) return alert('Enter a room code to join.');
     try{
@@ -1179,7 +1207,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function appendRow(idx,r){
     const tr=el('tr');
-    tr.innerHTML=`<td>${idx}</td><td>${r.time}</td><td>${r.side}</td><td><b>${r.code}</b></td><td>${r.num}</td><td>${esc(r.name)}</td><td>${r.action}</td><td>${r.qual}</td><td>${MEAN[r.action+r.qual]||''}</td><td class="table-actions"><button class="btn small delRow" data-i="${idx-1}">Delete</button></td>`;
+    tr.innerHTML=`<td>${idx}</td><td>${r.time}</td><td>${r.side}</td><td><b>${r.code}</b></td><td>${r.num}</td><td>${esc(r.name)}</td><td>${r.action}</td><td>${r.qual}</td><td>${MEAN[r.action+r.qual]||''}</td><td>${esc(r.by)}</td><td class="table-actions"><button class="btn small delRow" data-i="${idx-1}">Delete</button></td>`;
     $('log').querySelector('tbody').appendChild(tr);
   }
 
@@ -1209,7 +1237,7 @@ document.addEventListener('DOMContentLoaded', () => {
     Object.keys(S.zones[side]).forEach(z=>{ if(S.zones[side][z] && S.zones[side][z].num===num) byZone=S.zones[side][z]; });
     const byRoster=S.roster[side].find(p=>p.num===num);
     const name=(byZone&&byZone.name) || (byRoster&&byRoster.name) || '';
-    const row={time:now(), side, num, name, action:S.cur.action, qual:S.cur.qual};
+    const row={time:now(), side, num, name, action:S.cur.action, qual:S.cur.qual, by:S.myName||''};
     row.code=num+row.action+row.qual;
     EVT().log.push(row);
     bumpDash(side,num,name,row.action,row.qual);
@@ -1224,7 +1252,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('reset').addEventListener('click',()=>{ S.cur={side:'--',player:'',action:'',qual:''}; updateDisplay(); });
 
   $('exportCSV').onclick=()=>{
-    const rows=[["event","time","side","num","name","action","qual","code"],...EVT().log.map(r=>[S.currentEvent,r.time,r.side,r.num,r.name,r.action,r.qual,(r.num+r.action+r.qual)])];
+    const rows=[["event","time","side","num","name","action","qual","code","by"],...EVT().log.map(r=>[S.currentEvent,r.time,r.side,r.num,r.name,r.action,r.qual,(r.num+r.action+r.qual),r.by||''])];
     const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob=new Blob([csv],{type:'text/csv'});
     const url=URL.createObjectURL(blob);
