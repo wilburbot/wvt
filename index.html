@@ -729,10 +729,52 @@ document.addEventListener('DOMContentLoaded', () => {
     return s;
   }
 
+  // Firebase Realtime Database auto-converts any object whose keys are ALL
+  // small sequential-ish integers (like our zones' 1..6) into a JSON array
+  // on write, and can drop an empty array (like an unset libero's
+  // `partners: []`) entirely. Either one silently reshapes the data a
+  // client reads back, which broke rendering downstream (renderZones()
+  // would look up a non-existent "team0"/"opp0" slot from the phantom
+  // index-0 array entry and throw, aborting the rest of the render before
+  // it ever reached renderRoster() — roster adds looked like they weren't
+  // saving, when really they just weren't being re-drawn).
+  // zonesToWire/zonesFromWire re-key 1..6 to z1..z6 so Firebase never sees
+  // a purely-numeric-keyed object; applyRemoteSnapshot separately
+  // normalizes libero/roster/rotationIndex defensively in case any of this
+  // data reached the room from an older client or was pruned some other way.
+  function zonesToWire(zones){
+    const wire={};
+    ['Team','Opp'].forEach(side=>{
+      wire[side]={};
+      [1,2,3,4,5,6].forEach(z=>{ wire[side]['z'+z] = (zones && zones[side]) ? zones[side][z] : null; });
+    });
+    return wire;
+  }
+  function zonesFromWire(wire){
+    const out={ Team:{1:null,6:null,5:null,2:null,3:null,4:null}, Opp:{1:null,6:null,5:null,2:null,3:null,4:null} };
+    ['Team','Opp'].forEach(side=>{
+      [1,2,3,4,5,6].forEach(z=>{
+        const v = wire && wire[side] ? wire[side]['z'+z] : null;
+        out[side][z] = (v && v.num) ? { num:v.num, name:v.name||'' } : null;
+      });
+    });
+    return out;
+  }
+  function normalizeLibero(l){
+    const mk = x => ({ num: (x && x.num) || '', partners: (x && Array.isArray(x.partners)) ? x.partners : [], enabled: !!(x && x.enabled) });
+    return { Team: mk(l && l.Team), Opp: mk(l && l.Opp) };
+  }
+  function normalizeRoster(r){
+    return { Team: (r && Array.isArray(r.Team)) ? r.Team : [], Opp: (r && Array.isArray(r.Opp)) ? r.Opp : [] };
+  }
+  function normalizeRotationIndex(ri){
+    return { Team: (ri && ri.Team) || 1, Opp: (ri && ri.Opp) || 1 };
+  }
+
   function syncSnapshot(){
     return {
       log: EVT().log, dash: EVT().dash, rot: EVT().rot,
-      roster: S.roster, zones: S.zones, libero: S.libero, rotationIndex: S.rotationIndex,
+      roster: S.roster, zones: zonesToWire(S.zones), libero: S.libero, rotationIndex: S.rotationIndex,
       updatedAt: (typeof firebase!=='undefined') ? firebase.database.ServerValue.TIMESTAMP : Date.now()
     };
   }
@@ -754,13 +796,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if(!data) return;
     applyingRemote = true;
     try{
-      EVT().log = data.log || [];
+      EVT().log = Array.isArray(data.log) ? data.log : [];
       EVT().dash = data.dash || {};
       EVT().rot = data.rot || { serve:{}, so:{} };
-      S.roster = data.roster || { Team:[], Opp:[] };
-      S.zones = data.zones || { Team:{1:null,6:null,5:null,2:null,3:null,4:null}, Opp:{1:null,6:null,5:null,2:null,3:null,4:null} };
-      S.libero = data.libero || { Team:{ num:'', partners:[], enabled:false }, Opp:{ num:'', partners:[], enabled:false } };
-      S.rotationIndex = data.rotationIndex || { Team:1, Opp:1 };
+      S.roster = normalizeRoster(data.roster);
+      S.zones = zonesFromWire(data.zones);
+      S.libero = normalizeLibero(data.libero);
+      S.rotationIndex = normalizeRotationIndex(data.rotationIndex);
       localStorage.setItem(LS, JSON.stringify(S)); // mirror without re-broadcasting (applyingRemote guards save())
       renderAllFromEvent();
     } finally {
