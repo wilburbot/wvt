@@ -194,6 +194,7 @@
     <a href="#logger" id="tabLogger" class="active">Logger</a>
     <a href="#dash" id="tabDash">Dashboard</a>
     <a href="#board" id="tabBoard">Drawing Board</a>
+    <a href="#scout" id="tabScout">Scouting Report</a>
   </nav>
 </header>
 <main id="pages">
@@ -472,6 +473,38 @@
     </div>
   </div>
 </div>
+
+<!-- SCOUTING REPORT PAGE -->
+<div id="pageScout" class="page">
+  <div class="container">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h1>Scouting Report</h1>
+        <span class="pill" id="aiStatus">Checking…</span>
+      </div>
+      <div class="sub">Upload a scouting report (PDF or a photo of one) and/or paste notes below. The AI reads it together with this event's current Dashboard stats and gives a live summary and suggestions for the coaching staff.</div>
+
+      <div class="row" style="margin-top:10px">
+        <input type="file" id="scoutFile" accept="application/pdf,image/*" class="input">
+        <button class="btn ghost" id="scoutFileClear">Remove File</button>
+      </div>
+      <div class="sub" id="scoutFileName">No file uploaded.</div>
+
+      <textarea id="scoutNotes" class="input" style="width:100%;min-height:100px;margin-top:10px" placeholder="Or paste scouting notes here (opponent tendencies, rotations, serving targets, etc.)"></textarea>
+
+      <div class="row" style="margin-top:10px">
+        <button class="btn accent" id="scoutAnalyze">Analyze with AI</button>
+      </div>
+      <div class="sub" id="scoutHint">Uses this event's current Dashboard stats plus whatever report/notes are above. Each analysis costs a small amount on your Anthropic account, so this runs on demand — e.g. during a timeout or between sets — not automatically.</div>
+    </div>
+
+    <div class="card" id="scoutResultCard" style="display:none">
+      <h1>AI Analysis</h1>
+      <div class="sub" id="scoutMeta"></div>
+      <div id="scoutResult" style="white-space:pre-wrap;line-height:1.5"></div>
+    </div>
+  </div>
+</div>
 </main>
 
 <script>
@@ -610,14 +643,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const isLogger = h === '#logger';
     const isDash = h === '#dash';
     const isBoard = h === '#board';
+    const isScout = h === '#scout';
 
     $('tabLogger').classList.toggle('active', isLogger);
     $('tabDash').classList.toggle('active', isDash);
     $('tabBoard').classList.toggle('active', isBoard);
+    $('tabScout').classList.toggle('active', isScout);
 
     $('pageLogger').classList.toggle('active', isLogger);
     $('pageDash').classList.toggle('active', isDash);
     $('pageBoard').classList.toggle('active', isBoard);
+    $('pageScout').classList.toggle('active', isScout);
     document.body.classList.toggle('board-mode', isBoard);
 
     if(isDash) renderDash();
@@ -719,6 +755,21 @@ document.addEventListener('DOMContentLoaded', () => {
       return firebase.database();
     })();
     return fbReadyPromise;
+  }
+
+  let fbFunctionsReadyPromise = null;
+  function ensureFirebaseFunctions(){
+    if(!FIREBASE_CONFIGURED) return Promise.reject(new Error('The Scouting Report AI needs your Firebase config filled in first — same FIREBASE_CONFIG used for Live Sync (see the comment above it in the page source).'));
+    if(fbFunctionsReadyPromise) return fbFunctionsReadyPromise;
+    fbFunctionsReadyPromise = (async ()=>{
+      if(typeof firebase==='undefined' || typeof firebase.functions==='undefined'){
+        await loadScriptOnce('https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js');
+        await loadScriptOnce('https://www.gstatic.com/firebasejs/12.18.0/firebase-functions-compat.js');
+      }
+      if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+      return firebase.app().functions();
+    })();
+    return fbFunctionsReadyPromise;
   }
 
   function genRoomCode(){
@@ -1130,6 +1181,63 @@ document.addEventListener('DOMContentLoaded', () => {
       if(winner===recv) out[recv].succ++;
     });
     return out;
+  }
+
+  // A compact stats summary for the Scouting Report AI — deliberately a
+  // separate, independent aggregation rather than reusing renderDash()'s
+  // internals, so this feature can't regress the dashboard rendering that's
+  // already shipped and tested.
+  function getStatsForAI(){
+    const agg={};
+    const ensure=(side,num,name)=>{const k=side+":"+num; if(!agg[k]) agg[k]={side,num,name}; return agg[k];};
+    EVT().log.forEach(r=>{
+      const a=ensure(r.side,r.num,r.name);
+      const key=r.action+(r.qual||'');
+      a[key]=(a[key]||0)+1;
+    });
+    const so=computeRallies(EVT().log);
+    const bySide={Team:[],Opp:[]};
+    Object.values(agg).forEach(d=>{ if(d.side==='Team') bySide.Team.push(d); else if(d.side==='Opp') bySide.Opp.push(d); });
+
+    function sideSummary(side){
+      const list=bySide[side];
+      const sum=fn=>list.reduce((t,d)=>t+fn(d),0);
+      const attTotal=sum(d=>(d.AK||0)+(d.AE||0)+(d.AB||0)+(d['A-']||0));
+      const eff=attTotal?((sum(d=>d.AK||0)-sum(d=>d.AE||0))/attTotal):0;
+      const r3=sum(d=>d.R3||0), r2=sum(d=>d.R2||0), r1=sum(d=>d.R1||0), r0=sum(d=>d.R0||0);
+      const rTot=r3+r2+r1+r0;
+      const dTot=sum(d=>(d.D3||0)+(d.D2||0)+(d.D1||0)+(d.D0||0));
+      const dGood=sum(d=>(d.D3||0)+(d.D2||0));
+      const sTot=sum(d=>(d.SA||0)+(d['S+']||0)+(d['S-']||0)+(d.SE||0));
+      return {
+        attackEfficiencyPct: attTotal?Math.round(eff*100):null,
+        totalAttacks: attTotal,
+        receiveGoodPct: rTot?Math.round((r3+r2)/rTot*100):null,
+        receiveTotal: rTot,
+        digGoodPct: dTot?Math.round(dGood/dTot*100):null,
+        digTotal: dTot,
+        serves: sTot,
+        serviceAces: sum(d=>d.SA||0),
+        serviceErrors: sum(d=>d.SE||0),
+        blockKills: sum(d=>d.BK||0),
+        sideOutPct: so[side].att?Math.round(so[side].succ/so[side].att*100):null,
+        sideOutOpportunities: so[side].att,
+        players: list.map(d=>({
+          num: d.num, name: d.name,
+          kills: d.AK||0, attackErrors: d.AE||0, attackAttempts: (d.AK||0)+(d.AE||0)+(d.AB||0)+(d['A-']||0),
+          serviceAces: d.SA||0, serviceErrors: d.SE||0,
+          digs: (d.D3||0)+(d.D2||0)+(d.D1||0)+(d.D0||0),
+          blockKills: d.BK||0
+        }))
+      };
+    }
+
+    return {
+      event: S.currentEvent,
+      totalPlaysLogged: EVT().log.length,
+      team: sideSummary('Team'),
+      opponent: sideSummary('Opp')
+    };
   }
 
   function renderDash(){
@@ -1628,6 +1736,86 @@ document.addEventListener('DOMContentLoaded', () => {
     resizeCanvas();
   }
 
+  const SCOUT_LS = 'wpvb_scouting_report_v1';
+  let scoutFile = null; // { name, mediaType, base64 } — local to this device, never synced
+
+  function setupScoutingReport(){
+    $('aiStatus').textContent = FIREBASE_CONFIGURED ? 'Ready' : 'Not set up';
+    $('aiStatus').classList.toggle('live', FIREBASE_CONFIGURED);
+
+    function loadScoutFile(){
+      try{
+        const raw = localStorage.getItem(SCOUT_LS);
+        if(raw) scoutFile = JSON.parse(raw);
+      }catch(e){ scoutFile = null; }
+      renderScoutFileName();
+    }
+    function saveScoutFile(){
+      try{
+        if(scoutFile) localStorage.setItem(SCOUT_LS, JSON.stringify(scoutFile));
+        else localStorage.removeItem(SCOUT_LS);
+      }catch(e){ console.warn('Could not save the scouting report locally (it may be too large for this browser).', e); }
+    }
+    function renderScoutFileName(){
+      $('scoutFileName').textContent = scoutFile ? ('Loaded: '+scoutFile.name) : 'No file uploaded.';
+    }
+
+    $('scoutFile').addEventListener('change', ()=>{
+      const file = $('scoutFile').files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        const base64 = String(reader.result).split(',')[1] || '';
+        scoutFile = { name: file.name, mediaType: file.type || 'application/pdf', base64 };
+        saveScoutFile();
+        renderScoutFileName();
+      };
+      reader.onerror = ()=> alert('Could not read that file.');
+      reader.readAsDataURL(file);
+    });
+
+    $('scoutFileClear').addEventListener('click', ()=>{
+      scoutFile = null;
+      $('scoutFile').value = '';
+      saveScoutFile();
+      renderScoutFileName();
+    });
+
+    $('scoutAnalyze').addEventListener('click', async ()=>{
+      const notes = $('scoutNotes').value.trim();
+      if(!scoutFile && !notes){ alert('Upload a scouting report file or paste some notes first.'); return; }
+
+      const btn = $('scoutAnalyze');
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Analyzing…';
+      $('scoutResultCard').style.display = 'none';
+
+      try{
+        const functions = await ensureFirebaseFunctions();
+        const call = functions.httpsCallable('analyzeScoutingReport');
+        const payload = { eventName: S.currentEvent, stats: getStatsForAI() };
+        if(notes) payload.reportText = notes;
+        if(scoutFile){ payload.reportBase64 = scoutFile.base64; payload.reportMediaType = scoutFile.mediaType; }
+
+        const res = await call(payload);
+        const data = res.data || {};
+        $('scoutResult').textContent = data.text || '(No analysis text returned.)';
+        $('scoutMeta').textContent = data.model
+          ? `Generated with ${data.model}${data.usage ? ' · '+(data.usage.input_tokens||0)+' in / '+(data.usage.output_tokens||0)+' out tokens' : ''}`
+          : '';
+        $('scoutResultCard').style.display = 'block';
+      }catch(err){
+        alert('Could not get an analysis: '+(err && err.message ? err.message : err));
+      }finally{
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    });
+
+    loadScoutFile();
+  }
+
   ['Team','Opp'].forEach(side=>{ bindCourt(side); renderRoster(side); });
 
   function renderAllFromEvent(){
@@ -1646,6 +1834,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if($('eventSelect')) $('eventSelect').value=S.currentEvent;
   renderAllFromEvent();
   setupCoachBoard();
+  setupScoutingReport();
   applyHash();
 
   updateSyncUI('Offline', false);
