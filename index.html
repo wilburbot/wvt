@@ -492,6 +492,10 @@
         <button class="btn ghost" id="scoutFileClear">Remove File</button>
       </div>
       <div class="sub" id="scoutFileName">No file uploaded.</div>
+
+      <div class="row" style="margin-top:10px">
+        <button class="btn accent" id="scoutAnalyzeBtn">Analyze Report vs. Current Stats</button>
+      </div>
     </div>
 
     <div class="card">
@@ -1845,28 +1849,29 @@ document.addEventListener('DOMContentLoaded', () => {
       renderChat();
     });
 
-    async function sendChat(){
+    const ANALYSIS_PROMPT = 'Analyze the uploaded scouting report together with the current live Dashboard stats. Give: 1) a short summary of what is happening in the match right now, 2) 3-5 concrete, actionable in-game suggestions (rotations, matchups, serving/attacking targets) that connect the report to what the stats are currently showing, 3) anything in the stats that contradicts or updates the scouting report. Keep it scannable for a coach reading between rallies.';
+
+    // `presetText`, when given (the Analyze button), is sent as-is without
+    // touching whatever the coach may be mid-typing in the chat box.
+    async function sendChat(presetText){
       const input = $('scoutChatInput');
-      let text = input.value.trim();
-      if(!text){
-        if(chatMessages.length === 0 && scoutFile){
-          text = 'Give me a short summary of what is happening in the match right now, plus 3-5 concrete, actionable in-game suggestions based on this report and the live stats.';
-        } else {
-          return;
-        }
-      }
+      const isPreset = typeof presetText === 'string';
+      const text = isPreset ? presetText : input.value.trim();
+      if(!text) return;
       if(chatMessages.length === 0 && !scoutFile){
         alert('Upload a scouting report file first, then ask your question.');
         return;
       }
 
-      input.value = '';
+      if(!isPreset) input.value = '';
       chatMessages.push({ role:'user', text });
       chatMessages.push({ role:'assistant', text:'Thinking…', pending:true });
       renderChat();
 
       const sendBtn = $('scoutChatSend');
+      const analyzeBtn = $('scoutAnalyzeBtn');
       sendBtn.disabled = true;
+      analyzeBtn.disabled = true;
       input.disabled = true;
 
       try{
@@ -1890,17 +1895,23 @@ document.addEventListener('DOMContentLoaded', () => {
       }catch(err){
         chatMessages.pop();
         chatMessages.pop();
-        input.value = text;
+        if(!isPreset) input.value = text;
         alert('Could not get a reply: '+(err && err.message ? err.message : err));
       }finally{
         sendBtn.disabled = false;
+        analyzeBtn.disabled = false;
         input.disabled = false;
         renderChat();
-        input.focus();
+        if(!isPreset) input.focus();
       }
     }
 
-    $('scoutChatSend').addEventListener('click', sendChat);
+    $('scoutAnalyzeBtn').addEventListener('click', ()=>{
+      if(!scoutFile){ alert('Upload a scouting report file first.'); return; }
+      sendChat(ANALYSIS_PROMPT);
+    });
+
+    $('scoutChatSend').addEventListener('click', ()=>sendChat());
     $('scoutChatInput').addEventListener('keydown', e=>{
       if(e.key === 'Enter' && !e.shiftKey){
         e.preventDefault();
