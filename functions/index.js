@@ -10,52 +10,65 @@ const MODEL = 'claude-opus-5';
 
 // Builds the Claude request body from the callable's input. Pure/testable -
 // no Firebase or network dependency, so it can be exercised directly.
-function buildMessagesRequest({ reportBase64, reportMediaType, reportText, stats, eventName }) {
-  if (!reportBase64 && !reportText) {
-    throw new HttpsError('invalid-argument', 'Provide a scouting report file or pasted notes.');
+//
+// `messages` is the full chat history as plain {role, text} turns (the
+// client resends it in full on every call, since Claude is stateless
+// between requests). The uploaded report file and the live stats snapshot
+// are attached only to the FIRST user turn - re-embedding a whole PDF on
+// every message would be wasteful, and Claude keeps everything from earlier
+// turns in context anyway since the full array is resent each time.
+function buildMessagesRequest({ messages, reportBase64, reportMediaType, stats, eventName }) {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    throw new HttpsError('invalid-argument', 'No message provided.');
   }
   if (!stats) {
     throw new HttpsError('invalid-argument', 'Missing current match stats.');
   }
+  const firstUserIndex = messages.findIndex((m) => m && m.role === 'user');
+  if (firstUserIndex === -1) {
+    throw new HttpsError('invalid-argument', 'Conversation must include at least one user message.');
+  }
+  if (!reportBase64 && firstUserIndex === 0 && !messages[0].text) {
+    throw new HttpsError('invalid-argument', 'Provide a scouting report file or ask a question.');
+  }
 
-  const content = [];
-  if (reportBase64) {
-    const mediaType = reportMediaType || 'application/pdf';
-    if (mediaType.startsWith('image/')) {
-      content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: reportBase64 } });
-    } else {
-      content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: reportBase64 } });
+  const claudeMessages = messages.map((m, i) => {
+    const role = m.role === 'assistant' ? 'assistant' : 'user';
+    const text = String((m && m.text) || '');
+
+    if (i !== firstUserIndex) {
+      return { role, content: [{ type: 'text', text }] };
     }
-  }
 
-  const promptParts = [
-    `Match: ${eventName || 'Untitled event'}`,
-    '',
-    "Current live stats (from the team's stat-tracking dashboard):",
-    '```json',
-    JSON.stringify(stats, null, 2),
-    '```',
-  ];
-  if (reportText) {
-    promptParts.push('', 'Scouting notes (pasted text):', reportText);
-  }
-  promptParts.push(
-    '',
-    'Using the attached scouting report (if provided) and the live stats above, give the coaching staff:',
-    '1. A short summary of what is happening in the match right now.',
-    '2. 3-5 concrete, actionable in-game suggestions (rotations, matchups, serving/attacking targets) that connect the scouting report to what the stats are currently showing.',
-    '3. Anything in the stats that contradicts or updates the scouting report.',
-    '',
-    'Keep it scannable for a coach reading this between rallies - short headers and bullet points, not long paragraphs.'
-  );
-  content.push({ type: 'text', text: promptParts.join('\n') });
+    const content = [];
+    if (reportBase64) {
+      const mediaType = reportMediaType || 'application/pdf';
+      if (mediaType.startsWith('image/')) {
+        content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: reportBase64 } });
+      } else {
+        content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: reportBase64 } });
+      }
+    }
+    const intro = [
+      `Match: ${eventName || 'Untitled event'}`,
+      '',
+      "Current live stats (from the team's stat-tracking dashboard):",
+      '```json',
+      JSON.stringify(stats, null, 2),
+      '```',
+      '',
+      text || 'Give a short summary of what is happening in the match right now, plus 3-5 concrete, actionable in-game suggestions.',
+    ].join('\n');
+    content.push({ type: 'text', text: intro });
+    return { role, content };
+  });
 
   return {
     model: MODEL,
     max_tokens: 4096,
     system:
-      'You are an assistant volleyball scouting analyst helping a coaching staff during a live match. Be concise, concrete, and specific to the data given. Never invent stats or scouting details that were not provided.',
-    messages: [{ role: 'user', content }],
+      'You are an assistant volleyball scouting analyst chatting with a coaching staff during a live match. Be concise, concrete, and specific to the data given. Never invent stats or scouting details that were not provided. Keep replies scannable for a coach reading between rallies - short headers and bullet points, not long paragraphs, unless the coach asks for more detail.',
+    messages: claudeMessages,
   };
 }
 

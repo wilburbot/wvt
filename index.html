@@ -62,6 +62,13 @@
   .pill.live::before{content:'';position:absolute;left:8px;top:50%;width:7px;height:7px;border-radius:999px;background:#22c55e;transform:translateY(-50%);box-shadow:0 0 0 0 rgba(34,197,94,.55)}
   .pill.live::before{animation:livepulse 1.6s infinite}
   @keyframes livepulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 8px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+  .scout-chat{display:flex;flex-direction:column;gap:10px;max-height:52vh;overflow-y:auto;padding:4px 2px;margin-top:8px}
+  .scout-chat:empty::before{content:'Ask a question below to get started.';color:var(--muted);font-size:13px}
+  .scout-msg{max-width:80%;padding:9px 12px;border-radius:14px;font-size:13.5px;line-height:1.5;white-space:pre-wrap}
+  .scout-msg.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+  .scout-msg.assistant{align-self:flex-start;background:#f2f2f2;color:#000;border-bottom-left-radius:4px}
+  .scout-msg.assistant.pending{color:var(--muted);font-style:italic}
+  .scout-msg .scout-msg-meta{display:block;margin-top:6px;font-size:11px;opacity:.65;font-style:normal}
   table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden}
   thead tr{background:#ffe8d1}
   th,td{border-bottom:1px solid var(--line);padding:8px;text-align:left;font-size:13px}
@@ -220,7 +227,6 @@
           <button class="btn" id="roomJoin">Join Room</button>
           <button class="btn ghost" id="roomLeave" hidden>Stop Sync</button>
         </div>
-        <div class="sub">Live Sync shares the current event's roster, court, log, and dashboard in real time with anyone who has the room code — no login needed, same trust model as sharing a doc link. Enter your name so the Event Log shows who logged each play.</div>
       </div>
 
       <div class="two-col">
@@ -480,26 +486,24 @@
         <h1>Scouting Report</h1>
         <span class="pill" id="aiStatus">Checking…</span>
       </div>
-      <div class="sub">Upload a scouting report (PDF or a photo of one) and/or paste notes below. The AI reads it together with this event's current Dashboard stats and gives a live summary and suggestions for the coaching staff.</div>
 
       <div class="row" style="margin-top:10px">
         <input type="file" id="scoutFile" accept="application/pdf,image/*" class="input">
         <button class="btn ghost" id="scoutFileClear">Remove File</button>
       </div>
       <div class="sub" id="scoutFileName">No file uploaded.</div>
-
-      <textarea id="scoutNotes" class="input" style="width:100%;min-height:100px;margin-top:10px" placeholder="Or paste scouting notes here (opponent tendencies, rotations, serving targets, etc.)"></textarea>
-
-      <div class="row" style="margin-top:10px">
-        <button class="btn accent" id="scoutAnalyze">Analyze with AI</button>
-      </div>
-      <div class="sub" id="scoutHint">Uses this event's current Dashboard stats plus whatever report/notes are above. Each analysis costs a small amount on your Anthropic account, so this runs on demand — e.g. during a timeout or between sets — not automatically.</div>
     </div>
 
-    <div class="card" id="scoutResultCard" style="display:none">
-      <h1>AI Analysis</h1>
-      <div class="sub" id="scoutMeta"></div>
-      <div id="scoutResult" style="white-space:pre-wrap;line-height:1.5"></div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h1>Ask the AI</h1>
+        <button class="btn ghost" id="scoutChatClear">Clear Chat</button>
+      </div>
+      <div id="scoutChat" class="scout-chat"></div>
+      <div class="row" style="margin-top:10px;align-items:flex-end">
+        <textarea id="scoutChatInput" class="input" style="flex:1;min-height:44px;max-height:140px;resize:vertical" placeholder="Ask about the report, live stats, matchups, rotations…"></textarea>
+        <button class="btn accent" id="scoutChatSend">Send</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1812,35 +1816,95 @@ document.addEventListener('DOMContentLoaded', () => {
       renderScoutFileName();
     });
 
-    $('scoutAnalyze').addEventListener('click', async ()=>{
-      const notes = $('scoutNotes').value.trim();
-      if(!scoutFile && !notes){ alert('Upload a scouting report file or paste some notes first.'); return; }
+    // Chat state — transient (not persisted), reset on reload same as before.
+    // Each entry is {role:'user'|'assistant', text, meta?}. The full history
+    // is resent to the Cloud Function on every turn (Claude is stateless
+    // between calls); the server attaches the uploaded report + live stats
+    // to the first user turn only, so we're not re-uploading the file on
+    // every message.
+    let chatMessages = [];
 
-      const btn = $('scoutAnalyze');
-      const originalText = btn.textContent;
-      btn.disabled = true;
-      btn.textContent = 'Analyzing…';
-      $('scoutResultCard').style.display = 'none';
+    function renderChat(){
+      const box = $('scoutChat');
+      box.innerHTML = '';
+      chatMessages.forEach(m=>{
+        const bubble = el('div', 'scout-msg '+(m.role==='user' ? 'user' : 'assistant')+(m.pending ? ' pending' : ''));
+        bubble.textContent = m.text;
+        if(m.meta){
+          const meta = el('span', 'scout-msg-meta', m.meta);
+          bubble.appendChild(meta);
+        }
+        box.appendChild(bubble);
+      });
+      box.scrollTop = box.scrollHeight;
+    }
+
+    $('scoutChatClear').addEventListener('click', ()=>{
+      if(chatMessages.length && !confirm('Clear this conversation?')) return;
+      chatMessages = [];
+      renderChat();
+    });
+
+    async function sendChat(){
+      const input = $('scoutChatInput');
+      let text = input.value.trim();
+      if(!text){
+        if(chatMessages.length === 0 && scoutFile){
+          text = 'Give me a short summary of what is happening in the match right now, plus 3-5 concrete, actionable in-game suggestions based on this report and the live stats.';
+        } else {
+          return;
+        }
+      }
+      if(chatMessages.length === 0 && !scoutFile){
+        alert('Upload a scouting report file first, then ask your question.');
+        return;
+      }
+
+      input.value = '';
+      chatMessages.push({ role:'user', text });
+      chatMessages.push({ role:'assistant', text:'Thinking…', pending:true });
+      renderChat();
+
+      const sendBtn = $('scoutChatSend');
+      sendBtn.disabled = true;
+      input.disabled = true;
 
       try{
         const functions = await ensureFirebaseFunctions();
         const call = functions.httpsCallable('analyzeScoutingReport');
-        const payload = { eventName: S.currentEvent, stats: getStatsForAI() };
-        if(notes) payload.reportText = notes;
+        const payload = {
+          eventName: S.currentEvent,
+          stats: getStatsForAI(),
+          messages: chatMessages.filter(m=>!m.pending).map(m=>({ role:m.role, text:m.text }))
+        };
         if(scoutFile){ payload.reportBase64 = scoutFile.base64; payload.reportMediaType = scoutFile.mediaType; }
 
         const res = await call(payload);
         const data = res.data || {};
-        $('scoutResult').textContent = data.text || '(No analysis text returned.)';
-        $('scoutMeta').textContent = data.model
-          ? `Generated with ${data.model}${data.usage ? ' · '+(data.usage.input_tokens||0)+' in / '+(data.usage.output_tokens||0)+' out tokens' : ''}`
+        const pendingMsg = chatMessages[chatMessages.length - 1];
+        pendingMsg.pending = false;
+        pendingMsg.text = data.text || '(No analysis text returned.)';
+        pendingMsg.meta = data.model
+          ? `${data.model}${data.usage ? ' · '+(data.usage.input_tokens||0)+' in / '+(data.usage.output_tokens||0)+' out tokens' : ''}`
           : '';
-        $('scoutResultCard').style.display = 'block';
       }catch(err){
-        alert('Could not get an analysis: '+(err && err.message ? err.message : err));
+        chatMessages.pop();
+        chatMessages.pop();
+        input.value = text;
+        alert('Could not get a reply: '+(err && err.message ? err.message : err));
       }finally{
-        btn.disabled = false;
-        btn.textContent = originalText;
+        sendBtn.disabled = false;
+        input.disabled = false;
+        renderChat();
+        input.focus();
+      }
+    }
+
+    $('scoutChatSend').addEventListener('click', sendChat);
+    $('scoutChatInput').addEventListener('keydown', e=>{
+      if(e.key === 'Enter' && !e.shiftKey){
+        e.preventDefault();
+        sendChat();
       }
     });
 
