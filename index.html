@@ -1444,6 +1444,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const redoStack = [];
     let sized = false;
 
+    // Shape previews (line/arrow/x/circle) need a "base" to redraw on top of
+    // during a drag without disturbing the real canvas. Reloading that base
+    // from a data URL via `new Image()` on every pointermove is async, and
+    // those loads can resolve out of order — a stale callback from a
+    // finished stroke firing after the NEXT stroke has already started was
+    // exactly what caused shapes to double/ghost-draw when drawn back to
+    // back. baseCanvas is a plain in-memory canvas kept in sync
+    // synchronously, so preview redraws never race with anything.
+    const baseCanvas = document.createElement('canvas');
+    const baseCtx = baseCanvas.getContext('2d');
+    function syncBase(){
+      baseCanvas.width = canvas.width;
+      baseCanvas.height = canvas.height;
+      if(canvas.width && canvas.height) baseCtx.drawImage(canvas, 0, 0);
+    }
+
     // Fits the stage's own box (not just the canvas backing store) to the
     // largest 16:9 rectangle that fits inside board-main, sized by BOTH
     // available width and height — plain CSS aspect-ratio here only fits
@@ -1502,18 +1518,22 @@ document.addEventListener('DOMContentLoaded', () => {
       if(!sized){
         sized = true;
         saveState();
+      } else {
+        syncBase();
       }
     }
 
     function clearCanvas(){
       const rect = stage.getBoundingClientRect();
       ctx.clearRect(0, 0, rect.width, rect.height);
+      syncBase();
     }
 
     function saveState(){
       if(history.length > 100) history.shift();
       history.push(canvas.toDataURL());
       redoStack.length = 0;
+      syncBase();
     }
 
     function restoreState(url){
@@ -1522,6 +1542,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const rect = stage.getBoundingClientRect();
         ctx.clearRect(0, 0, rect.width, rect.height);
         ctx.drawImage(img, 0, 0, rect.width, rect.height);
+        syncBase();
       };
       img.src = url;
     }
@@ -1573,39 +1594,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function redrawPreview(x, y){
       const rect = stage.getBoundingClientRect();
-      const snapshot = history[history.length - 1];
-      if(!snapshot) return;
 
-      const img = new Image();
-      img.onload = () => {
-        ctx.clearRect(0, 0, rect.width, rect.height);
-        ctx.drawImage(img, 0, 0, rect.width, rect.height);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      ctx.drawImage(baseCanvas, 0, 0, rect.width, rect.height);
 
-        ctx.save();
-        ctx.strokeStyle = currentColor;
-        ctx.fillStyle = currentColor;
-        ctx.lineWidth = currentSize;
+      ctx.save();
+      ctx.strokeStyle = currentColor;
+      ctx.fillStyle = currentColor;
+      ctx.lineWidth = currentSize;
 
-        if(currentTool === 'line'){
-          ctx.beginPath();
-          ctx.moveTo(startX, startY);
-          ctx.lineTo(x, y);
-          ctx.stroke();
-        } else if(currentTool === 'arrow'){
-          drawArrow(startX, startY, x, y, currentColor, currentSize);
-        } else if(currentTool === 'x'){
-          drawX(startX, startY, x, y, currentColor, currentSize);
-        } else if(currentTool === 'circle'){
-          const radius = Math.hypot(x - startX, y - startY);
-          ctx.beginPath();
-          ctx.arc(startX, startY, radius, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-        }
+      if(currentTool === 'line'){
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+      } else if(currentTool === 'arrow'){
+        drawArrow(startX, startY, x, y, currentColor, currentSize);
+      } else if(currentTool === 'x'){
+        drawX(startX, startY, x, y, currentColor, currentSize);
+      } else if(currentTool === 'circle'){
+        const radius = Math.hypot(x - startX, y - startY);
+        ctx.beginPath();
+        ctx.arc(startX, startY, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
 
-        ctx.restore();
-      };
-      img.src = snapshot;
+      ctx.restore();
     }
 
     canvas.addEventListener('pointerdown', e => {
@@ -1649,6 +1664,15 @@ document.addEventListener('DOMContentLoaded', () => {
       if(!drawing) return;
       drawing = false;
       const p = getPos(e);
+
+      if(currentTool === 'line' || currentTool === 'arrow' || currentTool === 'x' || currentTool === 'circle'){
+        // Commit on top of the last saved base (not whatever pixels happen to
+        // be on-screen right now) so the final shape is always drawn exactly
+        // once, regardless of preview timing.
+        const rect = stage.getBoundingClientRect();
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        ctx.drawImage(baseCanvas, 0, 0, rect.width, rect.height);
+      }
 
       if(currentTool === 'line'){
         ctx.save();
