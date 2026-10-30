@@ -5,8 +5,8 @@ const Anthropic = require('@anthropic-ai/sdk');
 const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
 
 // Cheaper alternatives if cost matters more than top capability for this
-// use case: 'claude-sonnet-5' or 'claude-haiku-4-5'.
-const MODEL = 'claude-opus-5';
+// use case: 'claude-sonnet-5-5' or 'claude-haiku-5-5'.
+const MODEL = 'claude-opus-5-5';
 
 // Builds the Claude request body from the callable's input. Pure/testable -
 // no Firebase or network dependency, so it can be exercised directly.
@@ -66,6 +66,10 @@ function buildMessagesRequest({ messages, reportBase64, reportMediaType, stats, 
   return {
     model: MODEL,
     max_tokens: 4096,
+    // Coaching suggestions are a judgment call, not a lookup - worth the
+    // extra reasoning depth over Opus 5.5's medium default. Cost stays
+    // negligible per request either way (this runs on-demand, not per play).
+    output_config: { effort: 'high' },
     system:
       'You are an assistant volleyball scouting analyst chatting with a coaching staff during a live match. Be concise, concrete, and specific to the data given. Never invent stats or scouting details that were not provided. Keep replies scannable for a coach reading between rallies - short headers and bullet points, not long paragraphs, unless the coach asks for more detail.',
     messages: claudeMessages,
