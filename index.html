@@ -51,6 +51,7 @@
   .slot .num{font-weight:900;color:#000}
   .slot .pname{font-size:12px;color:#444}
   .slot.active{outline:3px solid var(--accent)}
+  #actions button.active, #quals button.active{outline:3px solid var(--accent)}
   .slot.libero{background:#ffe8d1;border-color:#ff7f11}
   .lib-badge{position:absolute;bottom:6px;right:8px;font-size:10px;background:#ff7f11;color:#fff;border-radius:6px;padding:2px 6px;display:none}
   .slot.libero .lib-badge{display:block}
@@ -1130,6 +1131,13 @@ document.addEventListener('DOMContentLoaded', () => {
     pillP.textContent='Player: '+(S.cur.player||'--');
     pillA.textContent='Action: '+(S.cur.action||'--');
     pillQ.textContent='Qualifier: '+(S.cur.qual||'--');
+
+    $('actions').querySelectorAll('button[data-action]').forEach(b=>{
+      b.classList.toggle('active', b.getAttribute('data-action')===S.cur.action);
+    });
+    $('quals').querySelectorAll('button').forEach(b=>{
+      b.classList.toggle('active', !!S.cur.qual && b.textContent===S.cur.qual);
+    });
   }
 
   $('actions').addEventListener('click',e=>{
